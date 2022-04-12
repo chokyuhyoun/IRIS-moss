@@ -2,7 +2,8 @@ PRO mossvar,areg, tag, mash, dembinning, sigma, makecube=makecube, mossfilter=mo
 demfilter=demfilter, variability=variability, rundem=rundem, movie=movie, netfilter=netfilter, $
 fexviii=fexviii,cleanflare=cleanflare,loopfilter=loopfilter, cnetfilter=cnetfilter, filter1700=filter1700,skip1700=skip1700, $
 cube_data=cube_data,wavecorr=wavecorr, read=read, manual_data=manual_data, filebychannel=filebychannel, timecorr=timecorr,$
-paper_data=paper_data,demrestore=demrestore,localcube=localcube,local_movie=local_movie
+paper_data=paper_data,demrestore=demrestore,localcube=localcube,local_movie=local_movie, $
+sdo_files=sdo_files
 
 ;April 1st - updating correlation step to use tr_get_disp (should be more stable)
 ;March 29th - cleaned up version
@@ -35,8 +36,7 @@ if keyword_set(cube_data) then begin
 		sdo_loc = areg+'/SDO'
 		allfiles = find_files('*aia_l2*',areg+'/SDO')
 	endif else begin
-		sdo_loc = areg+'/aia'
-		allfiles = find_files('*aia_l2*',areg+'/aia')
+		allfiles = file_search(areg, '*aia_l2*')
 	endelse
 
 	;Create hash structure with data and index for each wavelength
@@ -44,7 +44,8 @@ if keyword_set(cube_data) then begin
 	if n_elements(allfiles) ge 7 then begin
 
 		for i=0,n_channels-1 do begin
-			sdofile = find_files('*aia_l2*'+channels[i]+'.fits',sdo_loc)
+;			sdofile = find_files('*aia_l2*'+channels[i]+'.fits',sdo_loc)
+      sdofile = file_search(areg, '*aia_l2*'+channels[i]+'.fits')
 			print,sdofile
 
 			read_iris_l2,sdofile,index,data,/keep_null
