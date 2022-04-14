@@ -1,15 +1,14 @@
-PRO find_iris_moss_events3, hcr,outdir,eout,plotevent=plotevent,savesample=savesample,movie=movie
+PRO find_iris_moss_events3, dir,eout,outdir=outdir, plotevent=plotevent, $
+                            savesample=savesample,movie=movie
 
 ;returns a list of frames where moss variability events are found near the IRIS slit using the AIA MOSSVAR code
 
 ;INPUTS
-;HCR - takes the HCR structure from an iris data search
-;can be used with multiple HCR results or a single HCR structure
-;OUTDIR - where to save the output structures
-
+;dir - location of IRIS raster, IRIS SJI, and corresponding AIA data. 
+;      It is required full directory path. See example or below the procedure.  
 
 ;OUTPUTS
-;EOUT - the output structure - can be returned after running one HCR file - useful for testing
+;EOUT - the output structure - can be returned after running one HCR observation - useful for testing
 ;structure containing IRIS Spectrograph and SJI X and Y positions of detected events with the following info
 
 ;SG_TIME - spectrograph time
@@ -24,10 +23,13 @@ PRO find_iris_moss_events3, hcr,outdir,eout,plotevent=plotevent,savesample=saves
 ;IRIS_SG_XPIXEL - spectrograph x pixel index
 ;IRIS_SJI_XPIXEL - SJI x pixel index
 ;IRIS_SG_SCAN - spectrograph raster file number
+;IRIS_SG_DATA - extracted spectrograph data [lambda, # of events]
+;               The y-direction FOV of SJI is slightly larger than that of SG, 
+;               so some part of IRIS_SG_DATA may empty if moss is located near the edge of SJI FOV.  
 
 ;HEADER - the IRIS hcr header used to process this data
 ;ID - raster obs ID and date code
-;SJI_FILES and AIAFILES - files to locate the cubes
+;SJI_FILES and AIA_FILES - files to locate the cubes
 ;SJI_MAP - SJI map for each dectection
 ;EVENT_MAP - event detections per frame from the AIA MOSSVAR routine
 ;X/YSHIFT_IRIS2AIA - x and y offsets used to correct alignment
@@ -36,12 +38,15 @@ PRO find_iris_moss_events3, hcr,outdir,eout,plotevent=plotevent,savesample=saves
 ;SCAN_REPEATS - number of raster scans (1 for SNS)
 
 ;OPTIONS
+;OUTDIR - where to save the output structures (optional)
 ;PLOTEVENT - creates a plot for every event detection showing the AIA events and select event position on the slit
 ;SAVESAMPLE - records the SJI and AIA EVENT map structures for each event
 ;MOVIE - saves the AIA event movie from the MOSSVAR code - see its own instructions
 
 ;EXAMPLES
-;to return just the mossvar result
+;IDL> dir = file_search('~/desktop/', '*moss_test?', /test_dir, /fully)
+;IDL> find_iris_moss_events3, dir[0], eout, /savesample, /movie
+
 
 ;UPDATES
 ;27/11/19 - cleaned up outputs - added check to remove events from outside SJI positive data area
@@ -52,450 +57,461 @@ PRO find_iris_moss_events3, hcr,outdir,eout,plotevent=plotevent,savesample=saves
 ;14/11/19 - RASTER version
 ;8/11/19 - lite version to prepare for RASTER mode
 ;7/11/19 - Added AIA to IRIS image corellation check.
-;Takes the total image of each cube and finds the offet
-;AIA coordinates are automatically updated for use in finding the slit position
+;          Takes the total image of each cube and finds the offet
+;          AIA coordinates are automatically updated for use in finding the slit position
+;13/04/22 - save extracted spectrograph data in eout.iris_sg_data. 
+;           modified to operate with IRIS and AIA files downloaded via https://iris.lmsal.com/search/ 
+;           (K. Cho)  
 
-nresults = n_elements(hcr)
 
-slit_x = fltarr(nresults)
-date = strarr(nresults)
-obs_short = strarr(nresults)
-udir = strarr(nresults)
-number_mossframes = fltarr(nresults)
+;dir = '/Users/khcho/Desktop/moss_test2'
+;;plotevent = 1
+;savesample = 1
+;movie = 1
 
+cd, current=current_dir
+this_file = file_which('find_iris_moss_events3.pro')
+if this_file eq '' then this_file = file_search('~/desktop', 'find_iris_moss_events3.pro', /fully)
+cd, file_dirname(this_file)
+
+if n_elements(outdir) eq 0 then outdir = dir
+sg_files = file_search(dir, 'iris_l2_*raster*.fits')
+sji_files = file_search(dir, 'iris_l2_*SJI*.fits')
+aia_files = file_search(dir, 'aia_l2*.fits')
+aia_dir = file_dirname(aia_files[0])
+
+if n_elements(sg_files) eq 0 then begin
+  message, 'No IRIS data found. Please check the directory'
+  stop
+endif
+
+hcr = headfits(sg_files[0])
+hname = fxpar(hcr, 'obsid')
 ;how far to search around slit
 slit_offset = 1.0
 
-;start HCR loop
-for i=0,nresults-1 do begin
-    slit_x[i]=hcr[i].xcen
-    date[i] = hcr[i].starttime
-    obs_short[i] = hcr[i].iris_obsshort
-    uu = hcr[i].umodes
-    us = str_sep(uu,'/iris_')
-    udir[i] = us[0]
-    aiafiles = us[0]+'/aia'
-    hsep = str_sep(us[0],'/')
-    hname = hsep[-1]
-
-    ;SETUP USEFUL STRUCTURE TO STORE IRIS DATA CUBES
-    readme = 'IRIS SJI data and more'
-    storeplot = orderedhash('stores SJI maps for plotting later',readme)
-
-    ;GET IRIS SG FILES
-    sg_files = find_files('*raster*',us[0])
-    if sg_files eq '' then mash['status'] = 'no sg data'
-    nraster_scans = n_elements(sg_files)
 
-
-    ;RUN MOSSVAR ON AIA CUBE TO DETECT EVENTS
-    mossvar,udir[i],'',mash,4,4,/read,/cube_data
-    if mash['status'] eq 'data ok' then begin
+;SETUP USEFUL STRUCTURE TO STORE IRIS DATA CUBES
+readme = 'IRIS SJI data and more'
+storeplot = orderedhash('stores SJI maps for plotting later',readme)
 
-        mossvar,udir[i],'',mash,4,4,/moss,/cnet,/fexviii,/loop,/filter1700
-        if keyword_set(movie) then mossvar,udir[i],'',mash,4,4,/variability,/cleanflare,/local_movie
-        if ~keyword_set(movie) then mossvar,udir[i],'',mash,4,4,/variability,/cleanflare
+;GET IRIS SG FILES
+if sg_files[0] eq '' then mash['status'] = 'no sg data'
+nraster_scans = n_elements(sg_files)
 
-        ;cube of counted moss events
-        zcube = mash['zmatch no loop']
 
-        index193 = mash['aia_193'].index
-        data193 = mash['aia_193'].data
-        time193 = mash['aia_193'].index.date_obs
+;RUN MOSSVAR ON AIA CUBE TO DETECT EVENTS
+mossvar, dir, '',mash,4,4,/read,/cube_data
+if mash['status'] eq 'data ok' then begin
 
-        index2map, index193, data193 ,map193
+    mossvar,dir,'',mash,4,4,/moss,/cnet,/fexviii,/loop,/filter1700
+    if keyword_set(movie) then mossvar,dir,'',mash,4,4,/variability,/cleanflare,/movie
+    if ~keyword_set(movie) then mossvar,dir,'',mash,4,4,/variability,/cleanflare
 
-        ;take what's needed out of the hash structure
-        aia1600index = mash['aia_1600'].index
-        aia1600data =  mash['aia_1600'].data
+    ;cube of counted moss events
+    zcube = mash['zmatch no loop']
 
-        ;clean up memory
-        delvar,mash
-
-        ;AIA ZERO CROSSING CUBE
-        zmap = map193
-        zmap.data = zcube
-        print,'Event detection completed'
-        print,'created zcube map from MOSSVAR'
-
-        dsize = size(zmap.data)
-        xl = dsize[1]
-        yl = dsize[2]
-        tl = dsize[3]
+    index193 = mash['aia_193'].index
+    data193 = mash['aia_193'].data
+    time193 = mash['aia_193'].index.date_obs
 
-        ;get SJI index
-        sji_files = find_files('*SJI*',udir[i])
-        storeplot['sji_files'] = sji_files
-        num_sji = n_elements(sji_files)
-        sji_wins = strarr(num_sji)
+    index2map, index193, data193 ,map193
 
-        ;number of sji exposures in each wavelength
-        key_sji = intarr(num_sji+1)
+    ;take what's needed out of the hash structure
+    aia1600index = mash['aia_1600'].index
+    aia1600data =  mash['aia_1600'].data
 
-        sji_timeline = 'empty'
+    ;clean up memory
+;    delvar,mash
 
-        ;STORE THE SJI DATA AND OBSERVATION TIMES
-        for ss = 0,num_sji-1 do begin
-            read_iris_l2, sji_files[ss], sindex, sdata
-            sji_wins[ss] = sindex[0].TDESC1
+    ;AIA ZERO CROSSING CUBE
+    zmap = map193
+    zmap.data = zcube
+    print,'Event detection completed'
+    print,'created zcube map from MOSSVAR'
 
-            dstr = create_struct('sindex',sindex,'sdata',sdata)
-            storeplot['dstr_'+sji_wins[ss]] = dstr
+    dsize = size(zmap.data)
+    xl = dsize[1]
+    yl = dsize[2]
+    tl = dsize[3]
 
-            storeplot['time_'+sji_wins[ss]] = sindex.date_obs
-                ;concantenate obstimes into one vector
-            sji_timeline = [sji_timeline,sindex.date_obs]
+    ;get SJI index
+    storeplot['sji_files'] = sji_files
+    num_sji = n_elements(sji_files)
+    sji_wins = strarr(num_sji)
 
-            ;get the start index of the wavelength
-            key_sji[ss+1] = key_sji[ss] + n_elements(sindex.date_obs)
-        endfor
+    ;number of sji exposures in each wavelength
+    key_sji = intarr(num_sji+1)
 
-        sji_timeline = sji_timeline[1:*]
-        ;change this to the END index of each wavelength
-        key_sji = key_sji-1
-        key_sji[0] = 0
+    sji_timeline = 'empty'
 
+    ;STORE THE SJI DATA AND OBSERVATION TIMES
+    for ss = 0,num_sji-1 do begin
+        read_iris_l2, sji_files[ss], sindex, sdata
+        sji_wins[ss] = sindex[0].TDESC1
 
-        ;COALIGNMENT BETWEEN AIA AND IRIS, CHECK PERFORMED HERE - provides correlation coefficients
+        dstr = create_struct('sindex',sindex,'sdata',sdata)
+        storeplot['dstr_'+sji_wins[ss]] = dstr
 
-        ;USE 1400 but pick the next closest if 1400 is unavailable
-        scheck = where(sji_wins eq 'SJI_1400')
-        if scheck ne -1 then begin
-            print,'correlation with '+sji_wins[scheck]
-            align_iris_aia, storeplot['dstr_SJI_1400'].sindex, storeplot['dstr_SJI_1400'].sdata, aia1600index, aia1600data ,xcoeff,ycoeff
+        storeplot['time_'+sji_wins[ss]] = sindex.date_obs
+            ;concantenate obstimes into one vector
+        sji_timeline = [sji_timeline,sindex.date_obs]
 
-        endif else begin
-            print,'no SJI 1400 found reading '+sji_wins[0]
-            align_iris_aia, storeplot['dstr_'+sji_wins[0]].sindex, storeplot['dstr_'+sji_wins[0]].sdata, aia1600index, aia1600data ,xcoeff,ycoeff
-        endelse
+        ;get the start index of the wavelength
+        key_sji[ss+1] = key_sji[ss] + n_elements(sindex.date_obs)
+    endfor
 
-        delvar,aia1600index
-        delvar,aia1600data
+    sji_timeline = sji_timeline[1:*]
+    ;change this to the END index of each wavelength
+    key_sji = key_sji-1
+    key_sji[0] = 0
 
-        ;modify AIA EVENT MAP coordinates
-        ;caution if comparing to original AIA cube - this modifies the AIA cube
-        zmap.xc = zmap.xc - xcoeff
-        zmap.yc = zmap.yc - ycoeff
 
+    ;COALIGNMENT BETWEEN AIA AND IRIS, CHECK PERFORMED HERE - provides correlation coefficients
 
-        ;GET IRIS SG DATA
-        ;sg_files = find_files('*raster*',us[0])
-        ;nraster_scans = n_elements(sg_files)
+    ;USE 1400 but pick the next closest if 1400 is unavailable
+    scheck = where(sji_wins eq 'SJI_1400')
+    if scheck ne -1 then begin
+        print,'correlation with '+sji_wins[scheck]
+        align_iris_aia, storeplot['dstr_SJI_1400'].sindex, storeplot['dstr_SJI_1400'].sdata, aia1600index, aia1600data ,xcoeff,ycoeff
 
-        ;READ the first spectrograph file to check if raster or sit and stare
-        read_iris_l2, sg_files[0], index_sg
+    endif else begin
+        print,'no SJI 1400 found reading '+sji_wins[0]
+        align_iris_aia, storeplot['dstr_'+sji_wins[0]].sindex, storeplot['dstr_'+sji_wins[0]].sdata, aia1600index, aia1600data ,xcoeff,ycoeff
+    endelse
 
-        if index_sg[0].cdelt3 eq 0. then obstype = 'sit and stare'
-        if index_sg[0].cdelt3 gt 0. then obstype = 'raster'
+;    delvar,aia1600index
+;    delvar,aia1600data
 
-        print,'observation is a ',obstype
+    ;modify AIA EVENT MAP coordinates
+    ;caution if comparing to original AIA cube - this modifies the AIA cube
+    zmap.xc = zmap.xc - xcoeff
+    zmap.yc = zmap.yc - ycoeff
 
-        nraster_steps = index_sg[0].nrasterp
-        rstep_size = index_sg[0].steps_av
 
-        rlen = n_elements(index_sg.date_obs)
+    ;GET IRIS SG DATA
+    ;sg_files = find_files('*raster*',us[0])
+    ;nraster_scans = n_elements(sg_files)
 
-        ;total SG exposures in this HCR entry
-        tot_exposures = rlen * nraster_scans
+    ;READ the first spectrograph file to check if raster or sit and stare
+    read_iris_l2, sg_files[0], index_sg
 
-        ;OUTPUTS
-        ;define vector to store event positions
-        iris_sg_xpos = 0
-        iris_sji_xpos = 0
-        iris_sg_ypos = 0
-        iris_sg_xpixel = 0
-        iris_sji_xpixel = 0
-        iris_sg_ypixel = 0
-        tsji_closest = 0
+    if index_sg[0].cdelt3 eq 0. then obstype = 'sit and stare'
+    if index_sg[0].cdelt3 gt 0. then obstype = 'raster'
 
-        sji_time_index = 0
-        sji_time = 'empty'
-        iris_sji_wave = 'empty'
-        iris_sg_scan = 0
-        aia_step = 0
-        sg_time = 'empty'
-        aia_time = 'empty'
+    print,'observation is a ',obstype
 
-        expcount = 0
+    nraster_steps = index_sg[0].nrasterp
+    rstep_size = index_sg[0].steps_av
 
-        ;read all of the slit solar x positions from the sg files
-        sg_slit = fltarr(nraster_scans,rlen)
+    rlen = n_elements(index_sg.date_obs)
 
-        ;create dummy maps to make a save array
-        index2map,storeplot['dstr_'+sji_wins[0]].sindex[0], storeplot['dstr_'+sji_wins[0]].sdata[*,*,0], sji_save
-        map_save = zmap[0]
+    ;total SG exposures in this HCR entry
+    tot_exposures = rlen * nraster_scans
 
-        index_sji0 = storeplot['dstr_'+sji_wins[0]].sindex[0]
+    ;OUTPUTS
+    ;define vector to store event positions
+    iris_sg_xpos = 0
+    iris_sji_xpos = 0
+    iris_sg_ypos = 0
+    iris_sg_xpixel = 0
+    iris_sji_xpixel = 0
+    iris_sg_ypixel = 0
+    tsji_closest = 0
+    iris_sg_data = !null
+    
 
-        xfac = zmap[0].dx/sji_save[0].dx
-        yfac = zmap[0].dy/sji_save[0].dy
+    sji_time_index = 0
+    sji_time = 'empty'
+    iris_sji_wave = 'empty'
+    iris_sg_scan = 0
+    aia_step = 0
+    sg_time = 'empty'
+    aia_time = 'empty'
 
+    expcount = 0
 
-        ;===========================================================
+    ;read all of the slit solar x positions from the sg files
+    sg_slit = fltarr(nraster_scans,rlen)
 
-        for rr = 0,nraster_scans-1 do begin    ;start raster loop here <<<
-        print,'searching SG scan ',rr
+    ;create dummy maps to make a save array
+    index2map,storeplot['dstr_'+sji_wins[0]].sindex[0], storeplot['dstr_'+sji_wins[0]].sdata[*,*,0], sji_save
+    map_save = zmap[0]
 
-        read_iris_l2, sg_files[rr], index_sg
-        d = iris_obj(sg_files[rr])
-        xx = d->getxpos()
-        sg_slit[rr,*] = xx
+    index_sji0 = storeplot['dstr_'+sji_wins[0]].sindex[0]
 
-         for tiris = 0,rlen-1 do begin
-            ;go through every time step in one raster, or entire time range for SNS
-            ;then check the slit position against moss event count
+    xfac = zmap[0].dx/sji_save[0].dx
+    yfac = zmap[0].dy/sji_save[0].dy
 
-            ;sg index from start
-            tfromstart = rlen*rr + tiris
 
-            ;NEAREST 193 TIME TO IRIS SG EXPOSURE
-            tm = min( abs( anytim(time193)-anytim(index_sg[tiris].date_obs)) ,taia)
+    ;===========================================================
 
-            ;NEAREST SJI TO SG EXPOSURE
-            tn = min( abs(anytim(sji_timeline)-anytim(index_sg[tiris].date_obs)) ,tline)
+    for rr = 0,nraster_scans-1 do begin    ;start raster loop here <<<
+    print,'searching SG scan ',rr
 
+    read_iris_l2, sg_files[rr], index_sg, data_sg, /sil
+    d = iris_obj(sg_files[rr])
+    xx = d->getxpos()
+    sg_slit[rr,*] = xx
 
-            ;do this horrible complicated thing to find the correct SJI cube reference index
-            diffs = tline-key_sji
-            tt = where(diffs gt 0)
-            mint = min(diffs[tt],sjiloc)
+     for tiris = 0,rlen-1 do begin
+        ;go through every time step in one raster, or entire time range for SNS
+        ;then check the slit position against moss event count
 
-            ;corresponding time index on selected SJI cube
-            if sjiloc eq 0 then sline = tline
-            if sjiloc ge 1 then sline = tline-key_sji[sjiloc]-1
+        ;sg index from start
+        tfromstart = rlen*rr + tiris
 
-            index_sji = storeplot['dstr_'+sji_wins[sjiloc]].sindex
+        ;NEAREST 193 TIME TO IRIS SG EXPOSURE
+        tm = min( abs( anytim(time193)-anytim(index_sg[tiris].date_obs)) ,taia)
 
-            ;SJI X SCALE and SLIT POSITION ON SJI IMAGE
-            xdim_pix = index_sji[sline].naxis1
-            xcen = index_sji[sline].xcen
-            xfov = index_sji[sline].fovx
-            xscale = index_sji[sline].cdelt1
-            xslitpix = index_sji[sline].sltpx1ix    ;proper slit pixel on SJI
-            irisxrange = findgen(xdim_pix)*xscale+(xcen-(xfov/2.))
+        ;NEAREST SJI TO SG EXPOSURE
+        tn = min( abs(anytim(sji_timeline)-anytim(index_sg[tiris].date_obs)) ,tline)
 
-            ;store the event sji x position
-            sji_slit = irisxrange[xslitpix]
 
-            ;create x and y solar position axes (AIA)
-            map_fov, zmap[taia], xpos, ypos
+        ;do this horrible complicated thing to find the correct SJI cube reference index
+        diffs = tline-key_sji
+        tt = where(diffs gt 0)
+        mint = min(diffs[tt],sjiloc)
 
-            ;find pixels some +- of the slit
-            ;left and right limits in solar xy
-            leftedge = sg_slit[rr,tiris]-slit_offset
-            rightedge = sg_slit[rr,tiris]+slit_offset
+        ;corresponding time index on selected SJI cube
+        if sjiloc eq 0 then sline = tline
+        if sjiloc ge 1 then sline = tline-key_sji[sjiloc]-1
 
-            ;top and bottom edges of the slit on the AIA window (solar xy)
-            topedge = index_sg[tiris].ycen+(index_sg[tiris].fovy/2.)
-            bottomedge = index_sg[tiris].ycen-(index_sg[tiris].fovy/2.)
+        index_sji = storeplot['dstr_'+sji_wins[sjiloc]].sindex
 
-            ;slice of this on the AIA pixel scale
-            ww = where(xpos ge leftedge and xpos le rightedge)
-            yy = where(ypos ge bottomedge and ypos le topedge)
-            yyo = where(ypos lt bottomedge or ypos gt topedge)
+        ;SJI X SCALE and SLIT POSITION ON SJI IMAGE
+        xdim_pix = index_sji[sline].naxis1
+        xcen = index_sji[sline].xcen
+        xfov = index_sji[sline].fovx
+        xscale = index_sji[sline].cdelt1
+        xslitpix = index_sji[sline].sltpx1ix    ;proper slit pixel on SJI
+        irisxrange = findgen(xdim_pix)*xscale+(xcen-(xfov/2.))
 
-            zimage = reform(zcube[*,*,taia])
+        ;store the event sji x position
+        sji_slit = irisxrange[xslitpix]
 
-            ;events within slit window
-            zslice = zimage[ww,*]
-            zslice = zslice[*,yy]
+        ;create x and y solar position axes (AIA)
+        map_fov, zmap[taia], xpos, ypos
 
-            ;Full AIA size image of events in slit cutout
-            zcut = zimage*0
-            zcut[ww,*] = zimage[ww,*]
-            zcut[*,yyo] = 0
+        ;find pixels some +- of the slit
+        ;left and right limits in solar xy
+        leftedge = sg_slit[rr,tiris]-slit_offset
+        rightedge = sg_slit[rr,tiris]+slit_offset
 
-            ;total event pixel count per frame in the slit window
-            etotal = total(zslice)
+        ;top and bottom edges of the slit on the AIA window (solar xy)
+        topedge = index_sg[tiris].ycen+(index_sg[tiris].fovy/2.)
+        bottomedge = index_sg[tiris].ycen-(index_sg[tiris].fovy/2.)
 
-            ;GO FIND IRIS SG yposition IF event number is 1 or more
-            if etotal ge 1 then begin
+        ;slice of this on the AIA pixel scale
+        ww = where(xpos ge leftedge and xpos le rightedge)
+        yy = where(ypos ge bottomedge and ypos le topedge)
+        yyo = where(ypos lt bottomedge or ypos gt topedge)
 
-                ;count exposures with any event
-                expcount = expcount + 1
+        zimage = reform(zcube[*,*,taia])
 
-                print,'TIRIS ',tiris
-                print,'TAIA ',taia
-                print,'TSJI ',sline
+        ;events within slit window
+        zslice = zimage[ww,*]
+        zslice = zslice[*,yy]
 
-                ;here - use the proper SJI cube
+        ;Full AIA size image of events in slit cutout
+        zcut = zimage*0
+        zcut[ww,*] = zimage[ww,*]
+        zcut[*,yyo] = 0
 
-                ;make SJI map with correct SJI
-                ;this can be slow when there are a lot of events to create the map for
-                ;ideally this should be done outside of the loop but it needs to select the correct data cube...
+        ;total event pixel count per frame in the slit window
+        etotal = total(zslice)
 
-                ;tempdata = storeplot['dstr_'+sji_wins[sjiloc]].sdata
-                index2map, index_sji[sline], storeplot['dstr_'+sji_wins[sjiloc]].sdata[*,*,sline], sj_frame
+        ;GO FIND IRIS SG yposition IF event number is 1 or more
+        if etotal ge 1 then begin
 
-                sj_data = sj_frame.data
-                zdata = zmap[taia].data
+            ;count exposures with any event
+            expcount = expcount + 1
 
-                ;create x and y solar position axes (IRIS)
-                map_fov, sj_frame, ixpos, iypos
+            print,'TIRIS ',tiris
+            print,'TAIA ',taia
+            print,'TSJI ',sline
 
-                ;find the edges of the SJI window on AIA
-                mm1 = min(abs(xpos-ixpos[0]),mleft)
-                mm2 = min(abs(ypos-iypos[0]),mbottom)
-                imleft = mleft*xfac
-                imbottom = mbottom*yfac
+            ;here - use the proper SJI cube
 
-                ;AIA event map rescaled to SJI pixel size
-                jsize = size(sj_data)
-                sxl = jsize[1]
-                syl = jsize[2]
+            ;make SJI map with correct SJI
+            ;this can be slow when there are a lot of events to create the map for
+            ;ideally this should be done outside of the loop but it needs to select the correct data cube...
 
-                zdata_resize = congrid(zcut,xl*xfac, yl*yfac)
-                zdata_cut = zdata_resize[imleft:(sxl-1)+imleft,imbottom:(syl-1)+imbottom]
+            ;tempdata = storeplot['dstr_'+sji_wins[sjiloc]].sdata
+            index2map, index_sji[sline], storeplot['dstr_'+sji_wins[sjiloc]].sdata[*,*,sline], sj_frame
 
-                ;check only where SJI has data - removes events falling outside SJI data area
-                poscheck = sj_data gt -200
-                zdata_cut = zdata_cut AND poscheck
+            sj_data = sj_frame.data
+            zdata = zmap[taia].data
 
-                eventareas = (zdata_cut ge 1)   ;make sure this is a binary map
+            ;create x and y solar position axes (IRIS)
+            map_fov, sj_frame, ixpos, iypos
 
-                ;label_region will not create an event area for detections on the edge of the window
-                ;skip these as there is unlikely good IRIS data at the very edge?
+            ;find the edges of the SJI window on AIA
+            mm1 = min(abs(xpos-ixpos[0]),mleft)
+            mm2 = min(abs(ypos-iypos[0]),mbottom)
+            imleft = mleft*xfac
+            imbottom = mbottom*yfac
 
-                ;now split multiple detections along the slit into induvidual events
-                ;make a binary mask with uniquely numbered regions
-                lareas = label_region(eventareas)
+            ;AIA event map rescaled to SJI pixel size
+            jsize = size(sj_data)
+            sxl = jsize[1]
+            syl = jsize[2]
 
-                ;EVENT LOOP
-                ;IF THERE ARE EVENTS ON THE SLIT GO INTO EVENT BY EVENT LOOP
-                if max(lareas) ge 1 then begin
+            zdata_resize = congrid(zcut,xl*xfac, yl*yfac)
+            zdata_cut = zdata_resize[imleft:(sxl-1)+imleft,imbottom:(syl-1)+imbottom]
 
-                print,'event map has ',max(lareas),' events'
-                     for a = 1,max(lareas) do begin
-                        print,'event ',a
+            ;check only where SJI has data - removes events falling outside SJI data area
+            poscheck = sj_data gt -200
+            zdata_cut = zdata_cut AND poscheck
 
-                        aia_step = [aia_step, taia]
+            eventareas = (zdata_cut ge 1)   ;make sure this is a binary map
 
-                        sg_time = [sg_time, index_sg[tiris].date_obs]
-                        aia_time = [aia_time, time193[taia]]
+            ;label_region will not create an event area for detections on the edge of the window
+            ;skip these as there is unlikely good IRIS data at the very edge?
 
-                        sji_time = [sji_time, storeplot['dstr_'+sji_wins[sjiloc]].sindex[sline].date_obs]
+            ;now split multiple detections along the slit into induvidual events
+            ;make a binary mask with uniquely numbered regions
+            lareas = label_region(eventareas)
 
-                        ;make a map for each counted event
+            ;EVENT LOOP
+            ;IF THERE ARE EVENTS ON THE SLIT GO INTO EVENT BY EVENT LOOP
+            if max(lareas) ge 1 then begin
 
-                        eventarea = lareas eq a
-                        single_map = sj_frame
-                        single_map.data = eventarea
+            print,'event map has ',max(lareas),' events'
+                 for a = 1,max(lareas) do begin
+                    print,'event ',a
 
-                        ;compress into slit vector and get iris y slit positions
-                        eventareay = total(eventarea,1)
-                        wwevent = where(eventareay ge 1)
+                    aia_step = [aia_step, taia]
 
-                        ;event y centre
-                        eventy_index = mean(wwevent)
+                    sg_time = [sg_time, index_sg[tiris].date_obs]
+                    aia_time = [aia_time, time193[taia]]
 
-                        ;SAVE X AND Y EVENT POSITIONS
-                        iris_sg_xpos = [iris_sg_xpos, sg_slit[rr,tiris]]
-                        iris_sg_xpixel = [iris_sg_xpixel, tiris]   ;this will need to be the raster step number
+                    sji_time = [sji_time, storeplot['dstr_'+sji_wins[sjiloc]].sindex[sline].date_obs]
 
-                        iris_sji_xpos = [iris_sji_xpos, sji_slit]  ;check this one
-                        iris_sji_xpixel = [iris_sji_xpixel, xslitpix]
+                    ;make a map for each counted event
 
-                        iris_sg_ypos = [iris_sg_ypos, iypos[eventy_index]]
-                        iris_sg_ypixel = [iris_sg_ypixel, eventy_index]
+                    eventarea = lareas eq a
+                    single_map = sj_frame
+                    single_map.data = eventarea
 
-                        iris_sg_scan = [iris_sg_scan, rr]
-                        iris_sji_wave = [iris_sji_wave, sji_wins[sjiloc]]
-                        tsji_closest = [tsji_closest, sjiloc]
-                        sji_time_index = [sji_time_index, sline]
+                    ;compress into slit vector and get iris y slit positions
+                    eventareay = total(eventarea,1)
+                    wwevent = where(eventareay ge 1)
 
-                        if keyword_set(savesample) then begin
-                            ;saving the maps
-                            sji_save = [sji_save, sj_frame]
-                            map_save = [map_save, zmap[taia]]
-                        endif ;SAVESAMPLE
+                    ;event y centre
+                    eventy_index = mean(wwevent)
 
-                        if keyword_set(plotevent) then begin
-                            aia_lct,wave='193',/load
-                            plot_map,sj_frame,/log
+                    ;SAVE X AND Y EVENT POSITIONS
+                    iris_sg_xpos = [iris_sg_xpos, sg_slit[rr,tiris]]
+                    iris_sg_xpixel = [iris_sg_xpixel, tiris]   ;this will need to be the raster step number
 
-                            oplot,[leftedge,leftedge],[iypos[0],iypos[-1]]
-                            oplot,[rightedge,rightedge],[iypos[0],iypos[-1]]
+                    iris_sji_xpos = [iris_sji_xpos, sji_slit]  ;check this one
+                    iris_sji_xpixel = [iris_sji_xpixel, xslitpix]
 
-                            oplot,[sji_slit],[iypos[eventy_index]],psym=2,thick=2
-                            oplot,[sg_slit[rr,tiris]],[iypos[eventy_index]],psym=2,color=120,thick=2
+                    iris_sg_ypos = [iris_sg_ypos, iypos[eventy_index]]
+                    iris_sg_ypixel = [iris_sg_ypixel, eventy_index]
 
-                            loadct,1
-                            plot_map,zmap[taia],/cont,/over,color=130
-                            loadct,0
-                            pause
-                        endif ;PLOTEVENT
+                    iris_sg_scan = [iris_sg_scan, rr]
+                    iris_sji_wave = [iris_sji_wave, sji_wins[sjiloc]]
+                    tsji_closest = [tsji_closest, sjiloc]
+                    sji_time_index = [sji_time_index, sline]
 
-                    endfor ;A
-                endif  ;extra event check
+                    iris_sg_data = [[iris_sg_data], [data_sg[*, eventy_index, tiris]]] 
+                    if keyword_set(savesample) then begin
+                        ;saving the maps
+                        sji_save = [sji_save, sj_frame]
+                        map_save = [map_save, zmap[taia]]
+                    endif ;SAVESAMPLE
 
-            endif ;EVENT TOTAL GE 1
-        endfor ;IRIS cube loop
+                    if keyword_set(plotevent) then begin
+                        aia_lct,wave='193',/load
 
-    endfor ;raster file loop
+                        oplot,[sji_slit],[iypos[eventy_index]],psym=2,thick=2
+                        oplot,[sg_slit[rr,tiris]],[iypos[eventy_index]],psym=2,color=120,thick=2
 
+                        loadct,1, /sil
+                        plot_map,zmap[taia],/cont,/over,color=130
+                        loadct,0, /sil
+                        pause
+                    endif ;PLOTEVENT
 
-        ;clean initial 0s from counting vectors
-        if n_elements(sg_time) gt 1 then begin
-            sg_time = sg_time[1:*]
-            sji_time = sji_time[1:*]
-            aia_step = aia_step[1:*]
-            aia_time = aia_time[1:*]
-            iris_sg_xpos = iris_sg_xpos[1:*]
-            iris_sji_xpos = iris_sji_xpos[1:*]
-            iris_sg_ypos = iris_sg_ypos[1:*]
-            iris_sg_xpixel = iris_sg_xpixel[1:*]
-            iris_sji_xpixel = iris_sji_xpixel[1:*]
-            iris_sg_ypixel = iris_sg_ypixel[1:*]
+                endfor ;A
+            endif  ;extra event check
 
-            iris_sg_scan = iris_sg_scan[1:*]
-            iris_sji_wave = iris_sji_wave[1:*]
-            tsji_closest = tsji_closest[1:*]
-            sji_time_index = sji_time_index[1:*]
+        endif ;EVENT TOTAL GE 1
+    endfor ;IRIS cube loop
 
+endfor ;raster file loop
 
-            if keyword_set(savesample) then sji_save = sji_save[1:*]
-            if keyword_set(savesample) then map_save = map_save[1:*]
-        endif
 
-        ;EVENT SEARCH IS NOW COMPLETE (still working inside HCR loop)
+    ;clean initial 0s from counting vectors
+    if n_elements(sg_time) gt 1 then begin
+        sg_time = sg_time[1:*]
+        sji_time = sji_time[1:*]
+        aia_step = aia_step[1:*]
+        aia_time = aia_time[1:*]
+        iris_sg_xpos = iris_sg_xpos[1:*]
+        iris_sji_xpos = iris_sji_xpos[1:*]
+        iris_sg_ypos = iris_sg_ypos[1:*]
+        iris_sg_xpixel = iris_sg_xpixel[1:*]
+        iris_sji_xpixel = iris_sji_xpixel[1:*]
+        iris_sg_ypixel = iris_sg_ypixel[1:*]
 
+        iris_sg_scan = iris_sg_scan[1:*]
+        iris_sji_wave = iris_sji_wave[1:*]
+        tsji_closest = tsji_closest[1:*]
+        sji_time_index = sji_time_index[1:*]
 
-        ;summary of exposures with events in current cube
-        perc = (float(expcount)/float(tot_exposures))*100.
-        print,perc,'% of IRIS exposures have AIA event detections'
 
+        if keyword_set(savesample) then sji_save = sji_save[1:*]
+        if keyword_set(savesample) then map_save = map_save[1:*]
+    endif
 
-        if ~keyword_set(savesample) then begin
-            eout = {sg_time:sg_time, closest_sji2event:tsji_closest, sji_wave:iris_sji_wave,  $
-                    sji_time_index:sji_time_index, sji_time:sji_time, aia_step:aia_step, aia_time:aia_time, $
-                    iris_sg_xpos:iris_sg_xpos, iris_sji_xpos:iris_sji_xpos, iris_sg_ypos:iris_sg_ypos, $
-                    iris_sg_xpixel:iris_sg_xpixel, iris_sji_xpixel:iris_sji_xpixel, iris_sg_ypixel:iris_sg_ypixel, $
-                    iris_sg_scan:iris_sg_scan, $
-                    header:hcr[i], id:hname, sji_files:storeplot['sji_files'], aiafiles:aiafiles, sg_files:sg_files, $
-                    xshift_iris2aia:xcoeff, yshift_iris2aia:ycoeff, obs:obstype, scan_width:rlen, scan_repeats:nraster_scans}
-            save, eout, filename=outdir+'/events_hcr_'+hname+'.sav'
-        endif
+    ;EVENT SEARCH IS NOW COMPLETE (still working inside HCR loop)
 
 
-        if keyword_set(savesample) then begin
-            eout = {sg_time:sg_time, closest_sji2event:tsji_closest, sji_wave:iris_sji_wave, $
-                    aia_step:aia_step, aia_time:aia_time, sji_time_index:sji_time_index, $
-                    iris_sg_xpos:iris_sg_xpos, iris_sji_xpos:iris_sji_xpos, iris_sg_ypos:iris_sg_ypos, $
-                    iris_sg_xpixel:iris_sg_xpixel, iris_sji_xpixel:iris_sji_xpixel, iris_sg_ypixel:iris_sg_ypixel, $
-                    iris_sg_scan:iris_sg_scan, $
-                    header:hcr[i], id:hname, sji_files:storeplot['sji_files'], aiafiles:aiafiles, sg_files:sg_files, $
-                    event_map:map_save, sji_map:sji_save, $
-                    xshift_iris2aia:xcoeff, yshift_iris2aia:ycoeff, obs:obstype, scan_width:rlen, scan_repeats:nraster_scans}
-            save, eout, filename=outdir+'/events_hcr_'+hname+'.sav'
-        endif
+    ;summary of exposures with events in current cube
+    perc = (float(expcount)/float(tot_exposures))*100.
+    print,perc,'% of IRIS exposures have AIA event detections'
 
-        ;remove store of SJI maps before the next HCR file
-        delvar, storeplot
 
-    endif  ;data check
-endfor ; MAIN HCR ENTRY LOOP
+    if ~keyword_set(savesample) then begin
+        eout = {sg_time:sg_time, closest_sji2event:tsji_closest, sji_wave:iris_sji_wave,  $
+                sji_time_index:sji_time_index, sji_time:sji_time, aia_step:aia_step, aia_time:aia_time, $
+                iris_sg_xpos:iris_sg_xpos, iris_sji_xpos:iris_sji_xpos, iris_sg_ypos:iris_sg_ypos, $
+                iris_sg_xpixel:iris_sg_xpixel, iris_sji_xpixel:iris_sji_xpixel, iris_sg_ypixel:iris_sg_ypixel, $
+                iris_sg_scan:iris_sg_scan, iris_sg_data:iris_sg_data, $
+                header:hcr, id:hname, sji_files:storeplot['sji_files'], aia_files:aia_files, sg_files:sg_files, $
+                xshift_iris2aia:xcoeff, yshift_iris2aia:ycoeff, obs:obstype, scan_width:rlen, scan_repeats:nraster_scans}
+        save, eout, filename=outdir+'/events_hcr_'+hname+'.sav'
+    endif
+
+
+    if keyword_set(savesample) then begin
+        eout = {sg_time:sg_time, closest_sji2event:tsji_closest, sji_wave:iris_sji_wave, $
+                aia_step:aia_step, aia_time:aia_time, sji_time_index:sji_time_index, $
+                iris_sg_xpos:iris_sg_xpos, iris_sji_xpos:iris_sji_xpos, iris_sg_ypos:iris_sg_ypos, $
+                iris_sg_xpixel:iris_sg_xpixel, iris_sji_xpixel:iris_sji_xpixel, iris_sg_ypixel:iris_sg_ypixel, $
+                iris_sg_scan:iris_sg_scan, iris_sg_data:iris_sg_data, $
+                header:hcr, id:hname, sji_files:storeplot['sji_files'], aia_files:aia_files, sg_files:sg_files, $
+                event_map:map_save, sji_map:sji_save, $
+                xshift_iris2aia:xcoeff, yshift_iris2aia:ycoeff, obs:obstype, scan_width:rlen, scan_repeats:nraster_scans}
+        save, eout, filename=outdir+'/events_hcr_'+hname+'.sav'
+    endif
+
+    ;remove store of SJI maps before the next HCR file
+;    delvar, storeplot
+
+endif  ;data check
+
 ;=========================================
 
+cd, current_dir
+;return
+end
 
-return
+
+; find relevent directory
+dir = file_search('~/Desktop/', '*moss_test?', /fully, /test_dir)
+find_iris_moss_events3, dir[1], eout, /savesample, /movie 
 end

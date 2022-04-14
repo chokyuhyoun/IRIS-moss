@@ -17,9 +17,9 @@ for i = 0,n_elements(eout.sg_time)-1 do begin
 
     oplot,[eout.iris_sg_xpos[i]],[eout.iris_sg_ypos[I]],psym=2,color=120,thick=2
 
-    loadct,1
+    loadct,1, /sil
     plot_map,eout.event_map[i],/cont,/over,color=130
-    loadct,0
+    loadct,0, /sil
     pause
 endfor
 

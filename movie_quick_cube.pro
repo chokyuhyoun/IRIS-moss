@@ -52,14 +52,14 @@ for i=0, nframes-1 do begin
 
     plot_image, a193[x0:x1,y0:y1,i]^gamma,position=[0.05,0.05,0.5,0.95],min=100^gamma,max=8000^gamma
 
-    loadct,0
+    loadct,0, /sil
     for j=0,sd[2]-1 do begin
       wrow = where(zmatch[*,j,i] eq 1,wnum)
       if wnum gt 0 then oplot,[[wrow]],[[intarr(wnum)+j]],psym=8,color=254
     endfor
 
   if keyword_set(comp) then begin
-    loadct,1
+    loadct,1, /sil
     for j=0,sd[2]-1 do begin
       wrow = where(zmatch_d[*,j,i] eq 1,wnum)
       if wnum gt 0 then oplot,[[wrow]],[[intarr(wnum)+j]],psym=8,color=160
@@ -73,14 +73,14 @@ for i=0, nframes-1 do begin
     gamma = 0.3
     plot_image, fe18[x0:x1,y0:y1,i]^gamma,position=[0.5,0.05,0.95,0.95],ytickformat="(A1)",min=1,max=300^gamma  ;110
 
-    loadct,0
+    loadct,0, /sil
     for j=0,sd[2]-1 do begin
       wrow = where(zmatch[*,j,i] eq 1,wnum)
       if wnum gt 0 then oplot,[[wrow]],[[intarr(wnum)+j]],psym=8,color=254
     endfor
 
   if keyword_set(comp) then begin
-    loadct,7
+    loadct,7, /sil
     for j=0,sd[2]-1 do begin
       wrow = where(zmatch_d[*,j,i] eq 1,wnum)
       if wnum gt 0 then oplot,[[wrow]],[[intarr(wnum)+j]],psym=8,color=80

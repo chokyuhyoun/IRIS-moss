@@ -5,6 +5,19 @@ cube_data=cube_data,wavecorr=wavecorr, read=read, manual_data=manual_data, fileb
 paper_data=paper_data,demrestore=demrestore,localcube=localcube,local_movie=local_movie, $
 sdo_files=sdo_files
 
+;tclosest : nearest time to AIA 193 A
+;
+;/timecorr : align AIA 193 A time series data
+;/savecorr : align all AIA data based on 193A
+;/netfilter : find network region (1600 A 80 DN)
+;/cnetfilter : similar with /netfilter but use 1700 A
+;/mossfilter : create moss area mask (193A > 1250 DN)
+;/filter1700 : remove larger flare or filament brightening (1700A/1600A > 0.2)
+;/fexviii : Fe XVIII image (94A - 211A/120. - 171A/450.)
+;/loopfilter : find hot regions (94A > 5 DN)
+;/rundem : DEM on each time step
+
+
 ;April 1st - updating correlation step to use tr_get_disp (should be more stable)
 ;March 29th - cleaned up version
 ;May 24th - version now with correlation on data that removes rotation, and performs correlation between 171 and 193
@@ -782,7 +795,8 @@ endif
 
 if keyword_set(movie) then begin
 	file_mkdir,areg+'/movies/'
-	movie_quick_cube,mash,areg+'/movies/ar'+tag+'.mp4',0,0,0,0,0,0,/comp
+	id = mash['aia_193'].index[0].obsid
+	movie_quick_cube,mash,areg+'/movies/ar'+id+'.mp4',0,0,0,0,0,0,/comp
 
 	;movie_quick_cube,mash,ar'+tag+'.mp4',0,0,0,0,0,0,/comp
 endif
