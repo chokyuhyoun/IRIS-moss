@@ -1,4 +1,4 @@
-PRO find_iris_moss_events3, dir,eout,outdir=outdir, plotevent=plotevent, $
+PRO find_iris_moss_events4, dir,eout,outdir=outdir, plotevent=plotevent, $
                             savesample=savesample,movie=movie
 
 ;returns a list of frames where moss variability events are found near the IRIS slit using the AIA MOSSVAR code
@@ -167,34 +167,18 @@ if mash['status'] eq 'data ok' then begin
     key_sji = key_sji-1
     key_sji[0] = 0
 
-
-    ;COALIGNMENT BETWEEN AIA AND IRIS, CHECK PERFORMED HERE - provides correlation coefficients
-
-    ;USE 1400 but pick the next closest if 1400 is unavailable
-    scheck = where(sji_wins eq 'SJI_1400')
-    if scheck ne -1 then begin
-        print,'correlation with '+sji_wins[scheck]
-        align_iris_aia, storeplot['dstr_SJI_1400'].sindex, storeplot['dstr_SJI_1400'].sdata, $
-                        aia1600index, aia1600data ,xcoeff,ycoeff, /shift_check
-
+    dum = where(strmatch(sji_files, '*1400*'), n)
+    if n then begin
+      read_iris_l2, sji_files[dum], sji_index, sji_data, /sil
+      print, 'Use IRIS SJI_1400A for co-alignment'
     endif else begin
-        print,'no SJI 1400 found reading '+sji_wins[0]
-        align_iris_aia, storeplot['dstr_'+sji_wins[0]].sindex, storeplot['dstr_'+sji_wins[0]].sdata, $
-                        aia1600index, aia1600data ,xcoeff,ycoeff, /shift_check
+      read_iris_l2, sji_files[0], sji_index, sji_data, /sil
+      print, 'No IRIS SJI_1400A. Use IRIS '+sji_index.tdesc1+' for co-alignment'
     endelse
 
-    delvar,aia1600index
-    delvar,aia1600data
-
-    ;modify AIA EVENT MAP coordinates
-    ;caution if comparing to original AIA cube - this modifies the AIA cube
-    zmap.xc = zmap.xc - xcoeff
-    zmap.yc = zmap.yc - ycoeff
-
-
-    ;GET IRIS SG DATA
-    ;sg_files = find_files('*raster*',us[0])
-    ;nraster_scans = n_elements(sg_files)
+    aia1600time = anytim(aia1600index.date_obs)
+    sjitime = anytim(sji_index.date_obs) 
+    sji_sz = size(sji_data)
 
     ;READ the first spectrograph file to check if raster or sit and stare
     read_iris_l2, sg_files[0], index_sg
@@ -222,7 +206,8 @@ if mash['status'] eq 'data ok' then begin
     iris_sg_ypixel = 0
     tsji_closest = 0
     iris_sg_data = !null
-    
+    xcoeff = !null
+    ycoeff = !null
 
     sji_time_index = 0
     sji_time = 'empty'
@@ -270,6 +255,36 @@ if mash['status'] eq 'data ok' then begin
         ;NEAREST SJI TO SG EXPOSURE
         tn = min( abs(anytim(sji_timeline)-anytim(index_sg[tiris].date_obs)) ,tline)
 
+        ; co-alignment between AIA 1600 A and SJI 1400 A
+        dum = min(abs(sjitime - anytim(index_sg[tiris].date_obs)), match_sji)
+        dum = min(abs(aia1600time - anytim(index_sg[tiris].date_obs)), match_aia)
+
+        aia_img = aia1600data[*, *, match_aia]
+        del = [0., 0.]
+        for ii=0, 1 do begin
+          aia_xpdata = (findgen(dsize[1])-(dsize[1]-1)*0.5)*aia1600index[match_aia].cdelt1 $
+            + aia1600index[match_aia].crval1 - del[0]*aia1600index[0].cdelt1
+          aia_ypdata = (findgen(dsize[2])-(dsize[2]-1)*0.5)*aia1600index[match_aia].cdelt2 $
+            + aia1600index[match_aia].crval2 - del[1]*aia1600index[1].cdelt1
+          sji_xpdata = (findgen(sji_sz[1])-(sji_sz[1]-1)*0.5)*sji_index[match_sji].cdelt1 $
+            + sji_index[match_sji].crval1
+          sji_ypdata = (findgen(sji_sz[2])-(sji_sz[2]-1)*0.5)*sji_index[match_sji].cdelt2 $
+            + sji_index[match_sji].crval2
+
+          sji_int_xpix = interpol(findgen(sji_sz[1]), sji_xpdata, aia_xpdata)
+          sji_int_ypix = interpol(findgen(sji_sz[2]), sji_ypdata, aia_ypdata)
+
+          sji_corr_aia = interpolate(sji_data[*, *, match_sji], $
+            sji_int_xpix, sji_int_ypix, /grid)
+            
+          del0 = alignoffset(aia_img, sji_corr_aia)
+          del = del + del0  
+        endfor
+        xcoeff = [xcoeff, del[0]*aia1600index[0].cdelt1]
+        ycoeff = [ycoeff, del[1]*aia1600index[0].cdelt2]
+        
+        zmap[taia].xc = zmap[taia].xc - del[0]*aia1600index[0].cdelt1
+        zmap[taia].yc = zmap[taia].yc - del[1]*aia1600index[0].cdelt2        
 
         ;do this horrible complicated thing to find the correct SJI cube reference index
         diffs = tline-key_sji
@@ -420,6 +435,7 @@ if mash['status'] eq 'data ok' then begin
                     sji_time_index = [sji_time_index, sline]
 
                     iris_sg_data = [[iris_sg_data], [data_sg[*, eventy_index, tiris]]] 
+
                     if keyword_set(savesample) then begin
                         ;saving the maps
                         sji_save = [sji_save, sj_frame]
@@ -437,7 +453,7 @@ if mash['status'] eq 'data ok' then begin
                         loadct,0, /sil
                         pause
                     endif ;PLOTEVENT
-
+;                    stop
                 endfor ;A
             endif  ;extra event check
 
@@ -486,7 +502,7 @@ endfor ;raster file loop
                 iris_sg_scan:iris_sg_scan, iris_sg_data:iris_sg_data, $
                 header:hcr, id:hname, sji_files:storeplot['sji_files'], aia_files:aia_files, sg_files:sg_files, $
                 xshift_iris2aia:xcoeff, yshift_iris2aia:ycoeff, obs:obstype, scan_width:rlen, scan_repeats:nraster_scans}
-        save, eout, filename=outdir+'/event3.sav'
+        save, eout, filename=outdir+'/events_hcr_'+hname+'.sav'
     endif
 
 
@@ -499,7 +515,7 @@ endfor ;raster file loop
                 header:hcr, id:hname, sji_files:storeplot['sji_files'], aia_files:aia_files, sg_files:sg_files, $
                 event_map:map_save, sji_map:sji_save, $
                 xshift_iris2aia:xcoeff, yshift_iris2aia:ycoeff, obs:obstype, scan_width:rlen, scan_repeats:nraster_scans}
-        save, eout, filename=outdir+'/event3.sav'
+        save, eout, filename=outdir+'/events_hcr_'+hname+'.sav'
     endif
 
     ;remove store of SJI maps before the next HCR file
@@ -517,5 +533,5 @@ end
 
 ; find relevent directory
 dir = file_search('~/Desktop/', '*moss_test?', /fully, /test_dir)
-find_iris_moss_events3, dir[1], eout, /savesample, /movie 
+find_iris_moss_events4, dir[0], eout, /savesample, /movie 
 end
