@@ -5,18 +5,20 @@ cube_data=cube_data,wavecorr=wavecorr, read=read, manual_data=manual_data, fileb
 paper_data=paper_data,demrestore=demrestore,localcube=localcube,local_movie=local_movie, $
 sdo_files=sdo_files
 
-;tclosest : nearest time to AIA 193 A
+; See this paper. https://ui.adsabs.harvard.edu/abs/2019ApJ...880L..12G/abstract
+; 
+; tclosest : nearest time to AIA 193 A
 ;
 ;/timecorr : align AIA 193 A time series data
 ;/savecorr : align all AIA data based on 193A
 ;/netfilter : find network region (1600 A 80 DN)
-;/cnetfilter : similar with /netfilter but use 1700 A
+;/cnetfilter : similar to /netfilter but use 1700 A
 ;/mossfilter : create moss area mask (193A > 1250 DN)
 ;/filter1700 : remove larger flare or filament brightening (1700A/1600A > 0.2)
 ;/fexviii : Fe XVIII image (94A - 211A/120. - 171A/450.)
 ;/loopfilter : find hot regions (94A > 5 DN)
 ;/rundem : DEM on each time step
-
+;/variability : zero crossing pixel in 193 and 171A running difference map
 
 ;April 1st - updating correlation step to use tr_get_disp (should be more stable)
 ;March 29th - cleaned up version
