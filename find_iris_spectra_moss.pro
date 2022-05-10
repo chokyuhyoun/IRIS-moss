@@ -1,6 +1,6 @@
-;pro find_iris_spectra_moss, dir, eout, outdir=outdir
+pro find_iris_spectra_moss, dir, eout, outdir=outdir
 
-dir = '/Users/khcho/Desktop/moss_test2'
+;dir = '/Users/khcho/Desktop/moss_test2'
 ti = systime(/sec)
 
 ; DEFAULT SETTING
@@ -14,7 +14,6 @@ sg_files = file_search(dir, 'iris_l2_*raster*.fits')
 sji_files = file_search(dir, 'iris_l2_*SJI*.fits')
 aia_files = file_search(dir, 'aia_l2*.fits')
 aia_dir = file_dirname(aia_files[0])
-save_dir = file_dirname(sji_files[0])
 
 dum = where(strmatch(sji_files, '*1400*'), n)
 if n then begin
@@ -153,10 +152,11 @@ eout = {sg_spec:sg_spec, sg_ind:sg_ind, sg_phy:sg_phy, sji_ind:sji_ind, $
         sg_files:sg_files, sji_files:sji_files, aia_files:aia_files, $
         aia_shift:aia_shift}
 
-save_filename = save_dir+'/moss_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
+save_filename = out_dir+'/moss_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
 save, eout, filename=save_filename
 
 ;; verify the moss position --> save images
+file_mkdir, out_dir+'/imgs'
 hfov = 25
 w1 = window(dim=[12d2, 5d2])
 aia_lct, rr0, gg0, bb0, wavelnth=193
@@ -231,8 +231,7 @@ for i=0, (size(sg_spec))[2]-1 do begin
   
   p02.setdata, [eout.sg_phy[0, i]], [eout.sg_phy[1, i]]  
 ;stop
-  file_mkdir, save_dir+'/imgs'
-  w1.save, save_dir+'/imgs/'+string(i, f='(i03)')+'.png', resol=200
+  w1.save, out_dir+'/imgs/'+string(i, f='(i03)')+'.png', resol=200
 endfor
 
 print, 'It takes '+string((systime(/sec)-ti)/6d1, f='(f4.1)')+' s'
