@@ -63,7 +63,7 @@ if keyword_set(cube_data) then begin
       sdofile = file_search(areg, '*aia_l2*'+channels[i]+'.fits')
 			print,sdofile
 
-			read_iris_l2,sdofile,index,data,/keep_null
+			read_iris_l2,sdofile,index,data,/keep_null, /sil
 			dstr = create_struct('index',index,'data',data)
 			wavtag = 'aia_'+channels[i]
 			mash[wavtag] = dstr
