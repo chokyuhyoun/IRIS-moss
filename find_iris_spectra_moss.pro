@@ -96,7 +96,7 @@ if file_exist(save_filename) then begin
     dd = iris_obj(sg_files[i])
     sg_xp = dd->getxpos()
     sg_yp = dd->getypos()
-    sg_time = anytim(tai2utc(dd->ti2tai(0), /stime))
+    sg_time = anytim(tai2utc(dd->ti2tai(), /stime))
     iris_resp = iris_get_response((dd->ti2utc())[0])
     if i eq 0 then begin
       nwin = dd->getnwin()
