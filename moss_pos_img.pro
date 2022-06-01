@@ -6,7 +6,7 @@ sp_num = 0
 ;p02 = plot(/test, /nodata, /current)
 
 for i=0, n_elements(sav_files)-1 do begin
-    i = 2
+;    i = 1
   restore, sav_files[i], /relax
   sp_num += n_elements(eout.sji_fwhm)
   sji_1400_ind = where(strmatch(eout.sji_files, '*1400*') eq 1)
@@ -28,14 +28,14 @@ for i=0, n_elements(sav_files)-1 do begin
   wv3_ind = (where(strmatch(eout.line_id, '*2796*')))[0]
 
   for j=0, n_elements(aia_num)-1 do begin
-    ;    j=2
+;        j=0
     aia_num_j = indt[j]
     part = where(aia_indt eq aia_num[j])
 
     selx0 = eout.sg_phy[0, part]
     sely0 = eout.sg_phy[1, part]
 
-    w1 = window(dim=[12d2, 8d2])
+    w1 = window(dim=[12d2, 8d2], buffer=1)
     xr = eout.sg_phy[0, aia_num_j] + 10.*[-1, 1]
     yr = eout.sg_phy[1, aia_num_j] + 10.*[-1, 1]
     get_xp_yp, aia193_index[aia_num[j]], aia_xp, aia_yp
@@ -63,16 +63,18 @@ for i=0, n_elements(sav_files)-1 do begin
     im021 = image_kh(zcube0, aia_xp, aia_yp, over=im02, $
                     rgb_table=30, transp=30)
 
-    p01 = plot(selx0, sely0, 'o', color='y', sym_thick=2, transp=50, over=im02)
+    p02 = symbol(selx0, sely0, 'o', sym_color='y', sym_size=0.7, sym_thick=2, $
+                 sym_transp=50, target=im02, /data)
     t01 = text(im01.pos[0]+0.01, im01.pos[3]-0.03, 'Moss Positions', $
                 color=im011.rgb_table[*, 0], transp=im011.transp, $
                 font_name='margun gothic', font_size=13, font_style=1)
     t02 = text(im02.pos[0]+0.01, im02.pos[3]-0.03, $
               'Spectral Positions (n='+string(n_elements(part), f='(i2)')+')', $
-                color=p01.color, transp=p01.transp, $
+                color=p02.sym_color, transp=p02.sym_transp, $
                 font_name='margun gothic', font_size=13, font_style=1)
     p03 = plot(/test, /nodata, pos=im01.pos+[0.66, 0, 0.66, 0], /current, $
-               xr=[-50, 100], xtitle='Time from Peak (s)', title='SJI 1440 Light Curve', $
+               xr=[-70, 70], xtitle='Time from moss detection (s)', $
+               title='SJI 1400 $\AA$ Light Curve', $
                font_name='margun gothic', font_size=13, font_style=1)
     p04 = plot(/test, /nodata, pos=im01.pos+[0, -0.5, 0, -0.5], /current, $
                xr=minmax(eout.wave_list[wv1_ind]), xtitle='Wavelength ($\AA$)', $
@@ -89,10 +91,10 @@ for i=0, n_elements(sav_files)-1 do begin
     sg_obs = !null
     for k=0, n_elements(part)-1 do begin
       part_k = part[k]
-      p031 = plot((eout.sji_curve_ind[*, part_k] - eout.sji_peak_pos[part_k])*eout.sji_dt, $
+      p031 = plot((eout.sji_curve_ind[*, part_k] - eout.sji_ind[2, part_k])*eout.sji_dt $
+                  +eout.sji_phy[part_k]-eout.aia_phy[2, part_k], $
                   eout.sji_curve[*, part_k], over=p03)
-      sg_obs0 = eout.sg_phy[2, part_k] - eout.sji_phy[part_k] $
-               + eout.sji_dt*(eout.sji_ind[2, part_k] - eout.sji_peak_pos[part_k])
+      sg_obs0 = eout.sg_phy[2, part_k] - eout.aia_phy[2, part_k]
       sg_obs = [sg_obs, sg_obs0]         
                   
       p041 = plot(eout.wave_list[wv1_ind], (eout.data_list[wv1_ind])[*, part_k], over=p04)
@@ -102,11 +104,12 @@ for i=0, n_elements(sav_files)-1 do begin
     p04.yr = [-10, p04.yr[1]]
     p05.yr = [-10, p05.yr[1]]
     p06.yr = [-10, p06.yr[1]]
-    p032 = plot(sg_obs, mean(p03.yr)*(fltarr(n_elements(sg_obs))+1), 'r|', over=p03)
+    p032 = plot([0, 0], p03.yr, $
+                '--', over=p03, color=(im011.rgb_table)[*, 0], transp=im011.transp)
+    p033 = plot(sg_obs, (p03.yr[1]*0.9)*(fltarr(n_elements(sg_obs))+1), 'r|', over=p03)
     p060 = plot(2798.8*[1, 1], p06.yr, '--', over=p06)
-    
 ;    stop
-    w1.save, string(i, f='(i0)')+string(j, f='(i0)')+'.png', resol=200
+    w1.save, string(i, f='(i02)')+string(j, f='(i02)')+'.png', resol=200
     w1.close
   endfor
 

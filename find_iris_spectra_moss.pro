@@ -1,6 +1,6 @@
 pro find_iris_spectra_moss, out_dir, eout, iris_dir=iris_dir, aia_dir=aia_dir
 
-;dir = '/Users/khcho/Desktop/IRIS-moss-main/20160318_175434'
+;out_dir = '/Users/khcho/Desktop/IRIS-moss-main/20160319_090934'
 ti = systime(/sec)
 
 ; DEFAULT SETTING
@@ -57,21 +57,21 @@ if n_elements(sg_files) eq 0 then begin
 endif
 
 ;; RUN MOSSVAR ON AIA CUBE TO DETECT EVENTS
-;if ~file_exist(save_filename) then begin
-;  mossvar, aia_dir, '', mash, 4, 4,/read, /cube_data
-;  if mash['status'] ne 'data ok' then begin
-;    message, 'Failed to find moss structure from AIA data.'
-;    stop
-;  endif
-;  mossvar, aia_dir, '', mash, 4, 4, /moss, /cnet, /fexviii, /loop, /filter1700
-;  mossvar, aia_dir, '', mash, 4, 4, /variability, /cleanflare
-;  zcube = mash['zmatch no loop']
-;  
-;;  stop
-;endif else begin
-if file_exist(save_filename) then begin
+prev_sav_files = file_search(file_dirname(save_filename), '*.sav', count=count)
+if count eq 0 then begin
+  mossvar, aia_dir, '', mash, 4, 4,/read, /cube_data
+  if mash['status'] ne 'data ok' then begin
+    message, 'Failed to find moss structure from AIA data.'
+    stop
+  endif
+  mossvar, aia_dir, '', mash, 4, 4, /moss, /cnet, /fexviii, /loop, /filter1700
+  mossvar, aia_dir, '', mash, 4, 4, /variability, /cleanflare
+  zcube = mash['zmatch no loop']  
+endif else begin
+;if file_exist(save_filename) then begin
   restore, save_filename
   zcube = eout.zcube
+endelse
 
   ; VARIABLES TO SAVE
   sg_ind = !null ;; [ypix, scan #, file #]
@@ -79,7 +79,8 @@ if file_exist(save_filename) then begin
   sg_expt = !null
   sji_ind = !null ; t index for IRIS SJI cube
   sji_value = !null
-  sji_peak_pos = !null
+  sji_peak_ind = !null
+  sji_peak_phy = !null
   sji_fwhm = !null
   sji_i_0 = !null
   sji_curve = !null
@@ -152,11 +153,11 @@ if file_exist(save_filename) then begin
   
       spec_yind = reform(real_ind[1, *])
       moss_ind_spec = array_indices(moss_img, moss_ind[real_ind[0, *]])
-  
+      get_xp_yp, sji_index[match_sji], sji_xp, sji_yp
+      
       for k=0, n_elements(real_ind1)-1 do begin ; sg pixels within tolerance
         xpos = sg_xp[j]
-        ypos = sg_yp[spec_yind[k]]
-        get_xp_yp, sji_index[match_sji], sji_xp, sji_yp
+        ypos = sg_yp[spec_yind[k]]        
         sji_xpix = interpol(findgen(n_elements(sji_xp)), sji_xp, xpos)
         sji_ypix = interpol(findgen(n_elements(sji_yp)), sji_yp, ypos)
   ; check light curve in SJI 1400 : variavility < 60s, I-I_0 > 3 sigma
@@ -164,12 +165,13 @@ if file_exist(save_filename) then begin
         sji_curve0 = interpolate(sji_data, sji_xpix, sji_ypix, sji_curve_ind0, /grid)
         sji_curve0 = reform(sji_curve0) / sji_index[0].exptime * iris_resp.dn2phot_sji[1]
         sji_fwhm0 = !null
-        var_chk, sji_curve0, sji_index, sji_i_00, sji_peak_val0, sji_peak_pos0, sji_fwhm0
+        var_chk, sji_curve0, sji_index, sji_i_00, sji_peak_val0, sji_peak_ind0, sji_fwhm0
         if n_elements(sji_fwhm0) eq 0 then continue
-        sji_peak_pos0 += match_sji-t_lim_sji
+        sji_peak_ind0 += match_sji-t_lim_sji
+        sji_peak_phy0 = sji_time[sji_peak_ind0]
   
   ; save variables
-        for l=0, nwin-1 do begin
+        for l=0, nwin-1 do begin  ; for spectral windows
           dum = (dd->getvar(l))[*, spec_yind[k], j]
           data_list[l] = [[data_list[l]], [(dd->descale_array(dum))/ sg_expt[l]]]
         endfor
@@ -179,7 +181,8 @@ if file_exist(save_filename) then begin
         sji_phy = [sji_phy, sji_time[match_sji]]
         sji_curve = [[sji_curve], [sji_curve0]]
         sji_curve_ind = [[sji_curve_ind], [sji_curve_ind0]]
-        sji_peak_pos = [sji_peak_pos, sji_peak_pos0]
+        sji_peak_ind = [sji_peak_ind, sji_peak_ind0]
+        sji_peak_phy = [sji_peak_phy, sji_peak_phy0]   ; sji 1400 peak time in s 
         sji_peak_val = [sji_peak_val, sji_peak_val0]
         sji_i_0 = [sji_i_0, sji_i_00]
         sji_fwhm = [sji_fwhm, sji_fwhm0]
@@ -195,7 +198,7 @@ if file_exist(save_filename) then begin
         aia_ypix = interpol(findgen(n_elements(aia_yp)), aia_yp, ypos)
         aia193_value = [aia193_value, interpolate(aia193_data[*, *, match_aia193], aia_xpix, aia_ypix)]
       endfor ;sg pixels
-  
+;    if strmatch(aia193_index[match_aia193].date_obs, '*09:42:29*') eq 1 then stop
     endfor ; raster scan
     obj_destroy, dd
   endfor ; sg files
@@ -203,7 +206,8 @@ if file_exist(save_filename) then begin
   if n_elements(data_list[0]) ne 0 then begin
     eout = {data_list:data_list, wave_list:wave_list, line_id:line_id, $
             sg_ind:sg_ind, sg_phy:sg_phy, $
-            sji_ind:sji_ind, sji_phy:sji_phy, sji_value:sji_value, sji_peak_pos:sji_peak_pos, $
+            sji_ind:sji_ind, sji_phy:sji_phy, sji_value:sji_value, $
+            sji_peak_ind:sji_peak_ind, sji_peak_phy:sji_peak_phy, $
             sji_fwhm:sji_fwhm, sji_i_0:sji_i_0, sji_curve:sji_curve, $
             sji_curve_ind:sji_curve_ind, sji_dt:sji_index[0].cdelt3, $
             aia1600_ind:aia1600_ind, aia_ind:aia_ind, aia_phy:aia_phy, aia_shift:aia_shift, $
@@ -212,9 +216,10 @@ if file_exist(save_filename) then begin
     save, eout, filename=save_filename
   endif else begin
     print, 'No results'
-    save, sg_spec, filename=out_dir+'/No_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
+    eout = {zcube:zcube}
+    save, eout, filename=out_dir+'/No_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
   endelse
-endif
+;endif
 
 
 print, 'It takes '+string((systime(/sec)-ti)/6d1, f='(f4.1)')+' min'

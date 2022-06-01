@@ -20,7 +20,7 @@ for j=0, n_elements(id_list)-1 do begin
 ;  j = 7
   spec = !null
   for i=0, n_elements(sav_files)-1 do begin
-    restore, sav_files[i], /relax
+    restore, sav_files[i]
     read_iris_l2, eout.sg_files[0], index, /sil
     ind = (where(eout.line_id eq id_list[j], count))[0]
     if count eq 0 then continue
