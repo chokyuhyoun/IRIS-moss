@@ -1,4 +1,4 @@
-pro var_chk, curve, sji_index, i_0, the_peak_val, the_peak_ind, fwhm
+pro var_chk, curve, dt, fwhm
   t_lim_sji = n_elements(curve)/2
   binsize = 50
   dum = histogram(curve, loc=xbin, binsize=binsize)
@@ -7,7 +7,7 @@ pro var_chk, curve, sji_index, i_0, the_peak_val, the_peak_ind, fwhm
   peak_ind = where(sgn(d_curve[1:*]) - sgn(d_curve[0:-2]) eq -2) + 1
   exc_peak_val = curve[peak_ind+1]-i_0
   the_peak_ind = peak_ind[where(exc_peak_val gt 3.*stddev(curve) and $
-                                 abs(peak_ind-t_lim_sji) le 30./sji_index[0].cdelt3, $
+                                 abs(peak_ind-t_lim_sji) le 30./dt, $
                                  count)]
 ;  stop
   if count eq 0 then return   ; No peak
@@ -24,7 +24,7 @@ pro var_chk, curve, sji_index, i_0, the_peak_val, the_peak_ind, fwhm
   if total(right_curve lt hm) eq 0 then return
   endp = min(where(right_curve lt hm))
   right_ind = interpol(findgen(endp+1), right_curve[0:endp], hm)
-  fwhm = (right_ind + left_ind)*sji_index[0].cdelt3
+  fwhm = (right_ind + left_ind)*dt
 ;  print, fwhm
 ;  stop
   if fwhm gt 60. then fwhm = !null

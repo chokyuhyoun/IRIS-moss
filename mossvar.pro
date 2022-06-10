@@ -17,7 +17,9 @@ sdo_files=sdo_files
 ;/filter1700 : remove larger flare or filament brightening (1700A/1600A > 0.2)
 ;/fexviii : Fe XVIII image (94A - 211A/120. - 171A/450.)
 ;/loopfilter : find hot regions (94A > 5 DN)
-;/rundem : DEM on each time step
+;/rundem : make DEM results
+;/demfilter : remove DEM(log T = 5.6 ~ 5.8) > 2 * 10^26 cm^-5
+;                    DEM(log T = 6.7 ~ 7.0) > 2.5 * 10^27 cm^-5
 ;/variability : zero crossing pixel in 193 and 171A running difference map
 
 ;April 1st - updating correlation step to use tr_get_disp (should be more stable)
@@ -595,15 +597,15 @@ endif
 
 if keyword_set(demfilter) then begin
 
-dfiles = find_files('emcube_'+tag+'.sav',areg+'/dem')
+dfiles = find_files('emcube'+tag+'.sav',areg+'/dem')
 
-if keyword_set(demrestore) then begin
+;if keyword_set(demrestore) then begin
 	restore,dfiles
 	mash['dem'] = demstr
 	;this should be in the array made in rundem
 	mash['temp_array'] = 5.5+findgen(21)*0.1
 
-endif
+;endif
 
 dmax = ss[3]-1
 
@@ -788,7 +790,7 @@ mash['zmatch'] = zmatch_d
 
 
 plot_image,total(zmatch,3) gt 1
-
+;stop
 
 endif
 

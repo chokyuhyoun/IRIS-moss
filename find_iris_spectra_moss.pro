@@ -1,6 +1,6 @@
 pro find_iris_spectra_moss, out_dir, eout, iris_dir=iris_dir, aia_dir=aia_dir
 
-;out_dir = '/Users/khcho/Desktop/IRIS-moss-main/20160319_090934'
+;out_dir = '/Users/khcho/Desktop/IRIS-moss-main/20160320_110924'
 ti = systime(/sec)
 
 ; DEFAULT SETTING
@@ -42,6 +42,24 @@ read_iris_l2, aia_files[dum], aia193_index, aia193_data, /sil
 sji_time = anytim(sji_index.date_obs)
 aia1600_time = anytim(aia1600_index.date_obs)
 aia193_time = anytim(aia193_index.date_obs)
+
+; co-alignment between AIA 1600 A and SJI 1400 A - quadratic fitting
+del1 = !null
+for i=0, n_elements(aia1600_index)-1 do begin
+  dum = min(abs(aia1600_time[i]-sji_time), match)
+  aia_img = aia1600_data[*, *, i]
+  sji_img = sji_data[*, *, match]
+  aia_sji_align, aia_img, aia1600_index[i], $
+                 sji_img, sji_index[match], del0;, /cor0
+  del1 = [[del1], [del0]]  
+endfor
+tt = aia1600_time - aia1600_time[0]
+cox = reform(poly_fit(tt, del1[0, *], 4))
+coy = reform(poly_fit(tt, del1[1, *], 4))
+aia_shift = [[cox], [coy]] ; polynomial coeff. time from aia1600_time[0]
+;stop
+
+
 aia_sz = size(aia193_data)
 sji_sz = size(sji_data)
 t_lim = 60.
@@ -57,40 +75,36 @@ if n_elements(sg_files) eq 0 then begin
 endif
 
 ;; RUN MOSSVAR ON AIA CUBE TO DETECT EVENTS
-prev_sav_files = file_search(file_dirname(save_filename), '*.sav', count=count)
-if count eq 0 then begin
+;mossvar_save_name = aia_dir+'/mossvar_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
+;prev_sav_files = file_search(aia_dir, mossvar_save_name, count=count)
+;if count eq 0 then begin
   mossvar, aia_dir, '', mash, 4, 4,/read, /cube_data
   if mash['status'] ne 'data ok' then begin
     message, 'Failed to find moss structure from AIA data.'
     stop
   endif
-  mossvar, aia_dir, '', mash, 4, 4, /moss, /cnet, /fexviii, /loop, /filter1700
+  mossvar, aia_dir, '', mash, 4, 4, /moss, /cnet, /fexviii, /loop, /filter1700, /demfilter;, /rundem
   mossvar, aia_dir, '', mash, 4, 4, /variability, /cleanflare
-  zcube = mash['zmatch no loop']  
-endif else begin
-;if file_exist(save_filename) then begin
-  restore, save_filename
-  zcube = eout.zcube
-endelse
 
+;  save, mash, filename=mossvar_save_name  
+;endif else begin
+;;if file_exist(save_filename) then begin
+;  restore, mossvar_save_name
+;endelse
+;stop
+  zcube = mash['zmatch no loop']
   ; VARIABLES TO SAVE
   sg_ind = !null ;; [ypix, scan #, file #]
   sg_phy = !null
   sg_expt = !null
-  sji_ind = !null ; t index for IRIS SJI cube
-  sji_value = !null
-  sji_peak_ind = !null
-  sji_peak_phy = !null
-  sji_fwhm = !null
-  sji_i_0 = !null
-  sji_curve = !null
-  sji_curve_ind = !null
-  sji_peak_val = !null
-  sji_phy = !null
-  aia1600_ind = !null
+  sji_ind = !null ; [xpix, ypix, t] index for IRIS SJI cube
+  sji_phy = !null ; sji time
+  curve_fwhm = !null
+  si_iv_curve = !null
+  si_iv_time = !null
+  
   aia_ind = !null ; [x, y, t] index for IRIS / AIA cube
   aia_phy = !null  ; [x arcsec, y arcsec, sec from the beginning of AIA observation]
-  aia_shift = !null  ; in arcsec, compare to sji
   aia193_value = !null
   
   for i=0, n_elements(sg_files)-1 do begin ; raster file no
@@ -109,26 +123,28 @@ endelse
         sg_expt = [sg_expt, (dd->getexp(ii))[0]]
       endfor
     endif
-  
+    Si_IV_ind = (where(strmatch(dd->getline_id(), '*1403*')))[0]
+    sit_and_stare = dd->getsit_and_stare()
+    sg_dt = mean(sg_time[1:*] - sg_time[0:-2])
+    t_lim_sg = floor(t_lim*2 / sg_dt)
+    if (Si_IV_ind ne -1) and sit_and_stare then $
+      Si_IV_int_ind = where(wave_list[Si_IV_ind] gt 1402. and wave_list[Si_IV_ind] lt 1404.)
+    
+    
     for j=0, n_elements(sg_xp)-1 do begin ; raster scan no
   ; time check
       sg_aia193_tdiff = min(abs(sg_time[j]-aia193_time), match_aia193)
-      sg_aia1600_tdiff = min(abs(sg_time[j]-aia1600_time), match_aia1600)
+;      sg_aia1600_tdiff = min(abs(sg_time[j]-aia1600_time), match_aia1600)
       sg_sji_tdiff = min(abs(sg_time[j]-sji_time), match_sji)
       if sg_aia193_tdiff gt tol_t_sec then continue ; No matching time
       moss_img = zcube[*, *, match_aia193]
       moss_ind = where(moss_img eq 1, count)
       if count eq 0 then continue        ; No moss in AIA 193 A
   
-  ; align correction
-      aia_img = aia1600_data[*, *, match_aia1600]
-      sji_img = sji_data[*, *, match_sji]
-      aia_sji_align, aia_img, aia1600_index[match_aia1600], $
-                     sji_img, sji_index[match_sji], del;, /cor0
-  
+  ; align correction  
       get_xp_yp, aia193_index[match_aia193], aia_xp, aia_yp
-      aia_xp -= del[0]
-      aia_yp -= del[1]
+      aia_xp -= poly(aia193_time[match_aia193]-aia1600_time[0], aia_shift[*, 0])
+      aia_yp -= poly(aia193_time[match_aia193]-aia1600_time[0], aia_shift[*, 1])
       aia193_xxp = rebin(aia_xp, n_elements(aia_xp), n_elements(aia_yp))
       aia193_yyp = rebin(transpose(aia_yp), n_elements(aia_xp), n_elements(aia_yp))
   
@@ -157,19 +173,36 @@ endelse
       
       for k=0, n_elements(real_ind1)-1 do begin ; sg pixels within tolerance
         xpos = sg_xp[j]
-        ypos = sg_yp[spec_yind[k]]        
+        ypos = sg_yp[spec_yind[k]]
         sji_xpix = interpol(findgen(n_elements(sji_xp)), sji_xp, xpos)
         sji_ypix = interpol(findgen(n_elements(sji_yp)), sji_yp, ypos)
-  ; check light curve in SJI 1400 : variavility < 60s, I-I_0 > 3 sigma
-        sji_curve_ind0 = [match_sji-t_lim_sji:match_sji+t_lim_sji]
-        sji_curve0 = interpolate(sji_data, sji_xpix, sji_ypix, sji_curve_ind0, /grid)
-        sji_curve0 = reform(sji_curve0) / sji_index[0].exptime * iris_resp.dn2phot_sji[1]
-        sji_fwhm0 = !null
-        var_chk, sji_curve0, sji_index, sji_i_00, sji_peak_val0, sji_peak_ind0, sji_fwhm0
-        if n_elements(sji_fwhm0) eq 0 then continue
-        sji_peak_ind0 += match_sji-t_lim_sji
-        sji_peak_phy0 = sji_time[sji_peak_ind0]
-  
+    ; check light curve in SJI 1400 : variavility < 60s, I-I_0 > 3 sigma
+        if (SI_IV_ind ne -1) and sit_and_stare then begin
+          si_iv_curve0 = !null
+          ind00 = 0 > (j-t_lim_sg)
+          ind01 = (n_elements(sg_time)-1) < (j+t_lim_sg)
+          si_iv_time0 = sg_time[ind00:ind01]
+          curve_dt = sg_dt
+          for l=ind00, ind01 do begin
+            dum = reform((dd->getvar(SI_IV_ind))[*, spec_yind[k], l])
+            dum = (dd->descale_array(dum))/ sg_expt[si_iv_ind]
+            si_iv_curve0 = [si_iv_curve0,  total(dum[Si_IV_int_ind])] 
+          endfor
+        endif else begin             
+          sji_curve_ind0 = [match_sji-t_lim_sji:match_sji+t_lim_sji]
+          sji_curve0 = interpolate(sji_data, sji_xpix, sji_ypix, sji_curve_ind0, /grid)
+          si_iv_curve0 = reform(sji_curve0) / sji_index[0].exptime * iris_resp.dn2phot_sji[1]
+          si_iv_time0 = sji_time[sji_curve_ind0]
+          curve_dt = sji_index[0].cdelt3
+        endelse
+        curve_fwhm0 = !null
+        var_chk, si_iv_curve0, curve_dt, curve_fwhm0
+        if n_elements(curve_fwhm0) eq 0 then continue
+        if n_elements(si_iv_curve0) lt 2*t_lim_sji + 1 then begin
+          si_iv_curve0 = [si_iv_curve0, fltarr(2*t_lim_sji+1-n_elements(si_iv_curve0))]
+          si_iv_time0 = [si_iv_time0, fltarr(2*t_lim_sji+1-n_elements(si_iv_time0))]
+        endif
+        
   ; save variables
         for l=0, nwin-1 do begin  ; for spectral windows
           dum = (dd->getvar(l))[*, spec_yind[k], j]
@@ -179,16 +212,9 @@ endelse
         sg_phy = [[sg_phy], [xpos, ypos, sg_time[j]]]
         sji_ind = [[sji_ind], [sji_xpix, sji_ypix, match_sji]]
         sji_phy = [sji_phy, sji_time[match_sji]]
-        sji_curve = [[sji_curve], [sji_curve0]]
-        sji_curve_ind = [[sji_curve_ind], [sji_curve_ind0]]
-        sji_peak_ind = [sji_peak_ind, sji_peak_ind0]
-        sji_peak_phy = [sji_peak_phy, sji_peak_phy0]   ; sji 1400 peak time in s 
-        sji_peak_val = [sji_peak_val, sji_peak_val0]
-        sji_i_0 = [sji_i_0, sji_i_00]
-        sji_fwhm = [sji_fwhm, sji_fwhm0]
-        sji_value = [sji_value, sji_curve[n_elements(sji_curve0)/2]]
-        aia1600_ind = [aia1600_ind, match_aia1600]
-        aia_shift = [[aia_shift], [del]]
+        si_iv_curve = [[si_iv_curve], [si_iv_curve0]]
+        si_iv_time = [[si_iv_time], [si_iv_time0]]
+        curve_fwhm = [curve_fwhm, curve_fwhm0]
         aia_ind = [[aia_ind], [moss_ind_spec[*, k], match_aia193]]
         aia_phy = [[aia_phy], $
           [moss_xp[real_ind[0, k]], moss_yp[real_ind[0, k]], aia193_time[match_aia193]]]
@@ -206,17 +232,19 @@ endelse
   if n_elements(data_list[0]) ne 0 then begin
     eout = {data_list:data_list, wave_list:wave_list, line_id:line_id, $
             sg_ind:sg_ind, sg_phy:sg_phy, $
-            sji_ind:sji_ind, sji_phy:sji_phy, sji_value:sji_value, $
-            sji_peak_ind:sji_peak_ind, sji_peak_phy:sji_peak_phy, $
-            sji_fwhm:sji_fwhm, sji_i_0:sji_i_0, sji_curve:sji_curve, $
-            sji_curve_ind:sji_curve_ind, sji_dt:sji_index[0].cdelt3, $
-            aia1600_ind:aia1600_ind, aia_ind:aia_ind, aia_phy:aia_phy, aia_shift:aia_shift, $
+            sji_ind:sji_ind, sji_phy:sji_phy, $
+            curve_fwhm:curve_fwhm, si_iv_curve:si_iv_curve, si_iv_time:si_iv_time, $
+            sji_dt:sji_index[0].cdelt3, $
+            aia_ind:aia_ind, aia_phy:aia_phy, aia_shift:aia_shift, $
             aia193_value:aia193_value, zcube:zcube, sji_wave:sji_index[0].twave1, $
             sg_files:sg_files, sji_files:sji_files, aia_files:aia_files}
     save, eout, filename=save_filename
   endif else begin
     print, 'No results'
-    eout = {zcube:zcube}
+    eout = {wave_list:wave_list, line_id:line_id, $
+            aia_shift:aia_shift, $
+            zcube:zcube, sji_wave:sji_index[0].twave1, $
+            sg_files:sg_files, sji_files:sji_files, aia_files:aia_files}
     save, eout, filename=out_dir+'/No_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
   endelse
 ;endif

@@ -63,7 +63,7 @@ rfilter = fltarr(ss[1],ss[2],fs[3])
 
 
 for t = 0,fs[3]-1 do begin
-	rmask = highpass[*,*,t] AND lowpass[*,*,t]
+	rmask = highpass[*,*,t] or lowpass[*,*,t]
 
 	lmask = label_region(rmask)
 
@@ -78,7 +78,7 @@ for t = 0,fs[3]-1 do begin
 	rfilter[*,*,t] = dilate(dilate(dilate(dilate(rmask,ks),ks),ks),ks)
 endfor
 
-mash['dem filter'] = rfilter
-
+mash['dem filter'] = rfilter  ; use mash['dem mask'] in mossvar.pro
+;stop
 end
 

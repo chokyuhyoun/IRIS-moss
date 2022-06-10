@@ -3,6 +3,7 @@ function zeroaia,dcube,errors,sig,crossreturn=crossreturn
 ;use zerocrossings on AIA data
 
 ;returns zcube - binary mask where crossings happen
+; 2022. 6. 1 Kyuhyoun Cho - remove dip light curve case
 
 sc = size(dcube)
 
@@ -25,10 +26,9 @@ for i=0,sc[1]-1 do begin
 	for j=0,sc[2]-1 do begin
 		dint = reform(crosscube[i,j,*])
 
-			aa = zerocrossings(dint,n_crossings=rawcross)
-
-			ab = where(aa gt 0,n_crossings)
-
+;			aa = zerocrossings(dint,n_crossings=rawcross)
+    aa = where((sgn(dint[0:-2]) eq 1 and sgn(dint[1:*]) eq -1) or (dint eq 0), n_crossings)
+    if n_crossings gt 0 then aa = aa - dint[aa]/(dint[aa+1]-dint[aa])
 		crossmap[i,j] = n_crossings
 		
 		;array of positions where there are crossings, binary map
