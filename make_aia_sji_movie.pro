@@ -1,14 +1,6 @@
-function data_range, data, sig=sig
-  if n_elements(sig) eq 0 then sig=3
-  real = data[where(data ge 0)]
-  min = (mean(real) - sig*stddev(real)) > 0.
-  max = (mean(real) + sig*stddev(real)) < max(real)
-  return, [min, max]
-end
-
 dir = '/Users/khcho/Desktop/IRIS-moss-main/'
 cd, dir
-sav_files = file_search(dir, '*_*/*event*.sav', /fully)
+sav_files = file_search(dir, '*ar12775/*/*event*.sav', /fully)
 
 win_dim = [16d2, 8d2]
 side = 330
@@ -71,7 +63,7 @@ for i=0, n_elements(sav_files)-1 do begin
   titles = ['Fe XVIII ', 'AIA 193$\AA$ ', 'AIA 1700$\AA$ ', $
             'SJI '+string(eout.sji_wave, f='(i4)')+'$\AA$ ']
 
-  w1 = window(dim=win_dim, buffer=1)
+  w1 = window(dim=win_dim, buffer=0)
   whole_win = plot(indgen(2), /current, /nodata, axis_style=0, pos=[0, 0, 1, 1], $
                    xr=[0, 1], yr=[0, 1])
   im01 = !null
@@ -172,17 +164,18 @@ for i=0, n_elements(sav_files)-1 do begin
     dum = min(abs(times[1]-f_time), ind2)
     t_arr = (times[1])[ind1:ind2]
   endif else t_arr = times[-1]
-  sg_ind = intarr(n_elements(eout.curve_fwhm))
-  for ii = 0, n_elements(eout.curve_fwhm)-1 do begin
-    dum = min(abs(t_arr - eout.sg_phy[2, ii]), dum1)
-    sg_ind[ii] = dum1 
-  endfor
-
+  if strmatch(sav_files[i], '*moss_event*') then begin
+    sg_ind = intarr(n_elements(eout.curve_fwhm))
+    for ii = 0, n_elements(eout.curve_fwhm)-1 do begin
+      dum = min(abs(t_arr - eout.sg_phy[2, ii]), dum1)
+      sg_ind[ii] = dum1 
+    endfor
+  endif else sg_ind = !null
 ;================================================================
-  video = idlffvideowrite(movie_name)
-  framerate = 20
-  wdims = w1.dimensions
-  stream = video.addvideostream(wdims[0], wdims[1], framerate)
+;  video = idlffvideowrite(movie_name)
+;  framerate = 20
+;  wdims = w1.dimensions
+;  stream = video.addvideostream(wdims[0], wdims[1], framerate)
   percent = !null
   match0 = intarr(4) - 1
   match1 = intarr(4)
@@ -207,27 +200,30 @@ for i=0, n_elements(sav_files)-1 do begin
       if match0[k] eq match1[k] then continue 
       match0[k] = match1[k]
       match = match1[k]
-      cur_data = (k eq 0) ? fe_xviii_data : data[wv_ind] 
+      cur_data = (k eq 0) ? fe_xviii_data[*, *, match] : (data[wv_ind])[*, *, match] 
       get_xp_yp, (indices[wv_ind])[match], xp, yp
       xp -= poly((times[wv_ind])[match]-(times[-2])[0], eout.aia_shift[*, 0])
       yp -= poly((times[wv_ind])[match]-(times[-2])[0], eout.aia_shift[*, 1])
       im01[k].xr = xr
       im01[k].yr = yr
-      setdata_hi_res, im01[k], cur_data[*, *, match], xp, yp
+      if k eq 3 then cur_data = iris_intscale(temporary(cur_data), (indices[wv_ind])[match])
+      setdata_hi_res, im01[k], cur_data, xp, yp
       im01[k].min = wv_drange[0, k]
       im01[k].max = wv_drange[1, k]      
-      if k eq 0 then begin
+      if k eq 1 then begin
         moss_img = float(eout.zcube[*, *, match])
         moss_img[where(moss_img eq 0)] = !values.f_nan
         aia94_xp = xp
         aia94_yp = yp
+        for l=0, 3 do begin
+          setdata_hi_res, im011[k], moss_img, aia94_xp, aia94_yp
+          im011[k].min = 0
+          im011[k].max = 1
+        endfor
       endif
-      setdata_hi_res, im011[k], moss_img, aia94_xp, aia94_yp
-      im011[k].min = 0
-      im011[k].max = 1
-      
       if k eq 3 then p01.setdata, xp[(indices[-1])[match_sji].sltpx1ix*[1, 1]], yr
       t01[k].string = titles[k] + strmid((indices[wv_ind])[match].date_obs, 0, 19)
+;      stop
     endfor
 
 ;-------------------------------    
