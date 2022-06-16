@@ -1,6 +1,6 @@
 dir = '/Users/khcho/Desktop/IRIS-moss-main/'
 cd, dir
-sav_files = file_search(dir, '*ar12775/*/*event*.sav', /fully)
+sav_files = file_search(dir, '*2016*/*event*.sav', /fully)
 
 win_dim = [16d2, 8d2]
 side = 330
@@ -19,19 +19,19 @@ pyside = (py1-py0)/nplot
 
 wave_list = ['94', '193', '1700', '171', '211', '1600', 'sji']
 wv_inds = [0, 1, 2, 6]
-wv_drange = [[0, 50], [1e2, 7e3], [1e2, 5e3], [0, 2e2]]
+wv_drange = [[0, 50], [1e2, 7e3], [1e2, 5e3], [0, 255]]
 si_cen = 1402.77d
 mg_h_cen = 2803.5310d0
 mg_k_cen = 2796.3501d0
 mg_triplet = 2798.823d0
-si_dr = si_cen + 0.5*[-1, 1]
+si_dr = si_cen + 1.*[-1, 1]
 mg_h_dr = mg_h_cen + 2.*[-1, 1]
 mg_k_dr = mg_k_cen + 2.*[-1, 1]
 w_th_si = si_cen/3d8*sqrt(8.*alog(2.)*1.38d-23*10d0^(4.9)/(28.0855*1.6605d-27))  ; in angstrom
 w_inst = 0.026  ; in angstrom
 
 for i=0, n_elements(sav_files)-1 do begin
-;  i = 0
+;  i = 1
   print, sav_files[i]
   movie_name = strmid(sav_files[i], 0, strlen(sav_files[i])-3)+'mp4'
   t0 = systime(/sec)
@@ -48,7 +48,7 @@ for i=0, n_elements(sav_files)-1 do begin
     if wave_list[j] eq 'sji' then begin
       file = eout.sji_files[0]
     endif else begin
-      file = eout.aia_files[where(strmatch(eout.aia_files, '*'+wave_list[j]+'*'))]
+      file = eout.aia_files[where(strmatch(eout.aia_files, '*_'+wave_list[j]+'.fits'))]
     endelse
     read_iris_l2, file, index0, data0, /sil
     sz = size(data0)
@@ -63,7 +63,7 @@ for i=0, n_elements(sav_files)-1 do begin
   titles = ['Fe XVIII ', 'AIA 193$\AA$ ', 'AIA 1700$\AA$ ', $
             'SJI '+string(eout.sji_wave, f='(i4)')+'$\AA$ ']
 
-  w1 = window(dim=win_dim, buffer=0)
+  w1 = window(dim=win_dim, buffer=1)
   whole_win = plot(indgen(2), /current, /nodata, axis_style=0, pos=[0, 0, 1, 1], $
                    xr=[0, 1], yr=[0, 1])
   im01 = !null
@@ -97,28 +97,47 @@ for i=0, n_elements(sav_files)-1 do begin
     endfor
   endfor
     
-  p03 = !null
-  p04 = !null
+  p03 = objarr(nplot)
+  p031 = objarr(nplot)
+  t031 = objarr(nplot)
+  
+  p04 = objarr(nplot)
+  p041 = objarr(nplot, 2)
+  t041 = objarr(nplot, 2)
+  t040 = objarr(nplot)
+  
   for l=0, nplot-1 do begin
-    dum = plot(indgen(2), /hide, /current, /dev, $
-               pos=[px0, py1-pyside*(l+1), px0+pxside1, py1-pyside*l], $
-               title=(l eq 0) ? 'Si IV 1403' : '', $
-               font_size=12, font_name='malgun gothic', font_style=1, $
-               xr=si_cen+0.4*[-1, 1], yr=[0, 1], xticklen=0.08, yticklen=0, $
-               xtitle='Wavelength ($\AA$)', xtickinterval=0.5)
-    if l ne nplot-1 then dum.xshowtext = 0
-    dum.axes[1].showtext=0           
-    p03 = [p03, dum]
+    p03[l] = plot(indgen(2), /hide, /current, /dev, $
+                   pos=[px0, py1-pyside*(l+1), px0+pxside1, py1-pyside*l], $
+                   title=(l eq 0) ? 'Si IV 1403' : '', $
+                   font_size=12, font_name='malgun gothic', font_style=1, $
+                   xr=si_cen+0.7*[-1, 1], yr=[0, 1], xticklen=0.08, yticklen=0, $
+                   xtitle='Wavelength ($\AA$)', xtickinterval=1., yshowtext=0, $
+                   yminor=1)
+    if l ne nplot-1 then p03[l].xshowtext = 0
+    p031[l] = plot(indgen(2), /hide, '-2r', transp=40, over=p03[l])
+    t031[l] = text(p03[l].pos[0]+0.005, p03[l].pos[3]-0.007, '  ', $
+                   font_color=p031[l].color, transp=p031[l].transp, $
+                   font_size=9, vertical_align=1)
 
-    dum = plot(indgen(2), /hide, /current, /dev, $
-               pos=[px1-pxside2, py1-pyside*(l+1), px1, py1-pyside*l], $
-               title=(l eq 0) ? 'Mg II k 2796' : '', $
-               font_size=12, font_name='malgun gothic', font_style=1, $
-               xr=[2795d, 2805d]+[-0.2, 0.2], xtitle='Wavelength ($\AA$)', $
-               yr=[0, 1], xticklen=0.08, yticklen=0)
-    if l ne nplot-1 then dum.xshowtext = 0           
-    dum.axes[1].showtext=0
-    p04 = [p04, dum]
+    p04[l] = plot(indgen(2), /hide, /current, /dev, $
+                   pos=[px1-pxside2, py1-pyside*(l+1), px1, py1-pyside*l], $
+                   title=(l eq 0) ? 'Mg II k 2796' : '', $
+                   font_size=12, font_name='malgun gothic', font_style=1, $
+                   xr=[2795d, 2805d]+[-0.2, 0.2], xtitle='Wavelength ($\AA$)', $
+                   yr=[0, 1], xticklen=0.08, yticklen=0, yshowtext=0, yminor=1)
+    if l ne nplot-1 then p04[l].xshowtext = 0           
+    for m=0, 1 do begin
+      p041[l, m] = plot(indgen(2), /hide, '-2r', transp=40, over=p04[l])
+      par_pos = ([1133., 1345.]/win_dim[0])[m]
+      t041[l, m] = text(par_pos, p04[l].pos[3]-0.07, '  ', $
+                        font_color=p041[l, m].color, transp=p041[l, m].transp, $
+                        font_size=10, vertical_align=1)
+    endfor
+    t040[l] = text(mean(p04[l].pos[[0, 2]]), p04[l].pos[3]-0.05, '  ', $
+                  font_size=12, font_name='malgun gothic', font_style=1, $
+                  align=0.5)
+    
   endfor
 
   iris_resp = iris_get_response((times[0])[0])
@@ -215,13 +234,15 @@ for i=0, n_elements(sav_files)-1 do begin
         moss_img[where(moss_img eq 0)] = !values.f_nan
         aia94_xp = xp
         aia94_yp = yp
+      endif
+      if k eq 3 then begin
+        p01.setdata, xp[(indices[-1])[match_sji].sltpx1ix*[1, 1]], yr
         for l=0, 3 do begin
-          setdata_hi_res, im011[k], moss_img, aia94_xp, aia94_yp
-          im011[k].min = 0
-          im011[k].max = 1
+          setdata_hi_res, im011[l], moss_img, aia94_xp, aia94_yp
+          im011[l].min = 0
+          im011[l].max = 1
         endfor
       endif
-      if k eq 3 then p01.setdata, xp[(indices[-1])[match_sji].sltpx1ix*[1, 1]], yr
       t01[k].string = titles[k] + strmid((indices[wv_ind])[match].date_obs, 0, 19)
 ;      stop
     endfor
@@ -230,15 +251,7 @@ for i=0, n_elements(sav_files)-1 do begin
     moss = where(sg_ind eq j, count)
 plot_spectra :
     rep = (count-1)/nplot
-    p031 = !null
-    p032 = !null
-    t031 = !null
-    
-    p041 = !null
-    p042 = !null
-    t041 = !null
-    t040 = !null
-    
+
     for l = 0, count-1 do begin  ; Spectrograph data
       if l ge 5 then continue
       if si_win then begin
@@ -246,38 +259,34 @@ plot_spectra :
         cenp = where((si_wave ge si_dr[0]) and (si_wave le si_dr[1]))
         si_wavep = si_wave[cenp]
         temp_datap = temp_data[cenp]
-        dum0 = plot(si_wave, temp_data, over=p03[l])
+        p03[l].setdata, si_wave, temp_data
         p03[l].ystyle = 2
         p03[l].yr = [-5, p03[l].yr[1]]
         p03[l].axes[1].showtext=1
         p03[l].yticklen=0.07
-        p03[l].yminor = 1
   ;      p03[l].ytickval = p03[l].ytickval[0:-2]
         si_err = sqrt((temp_datap*si_dn2phot) > 0)/si_dn2phot + 1.
         si_err[si_err lt 1.] = 1e5
         fit_res = gaussfit(si_wavep, temp_datap, coeff, nterms=4, measure_error=si_err)
-        dum1 = plot(si_wavep, fit_res, '-2r', transp=20, over=p03[l])
+        p031[l].setdata, si_wavep, fit_res
         w_fwhm = 2.*sqrt(2.*alog(2.))*coeff[2]
         w_nth = sqrt(w_fwhm^2. - w_th_si^2. - w_inst^2.)
-        dumt = text(p03[l].pos[0]+0.005, p03[l].pos[3]-0.007, $
-                    'A = '+string(coeff[0], f='(f5.1)')+' DN!c'+ $
-                    '$v_D$ = '+string(3d5*(coeff[1]-si_cen)/si_cen, f='(f5.1)')+' km s$^{-1}$!c'+ $
-                    '$v_{nth}$ = '+string(w_nth*3d5/si_cen, f='(f5.1)')+' km s$^{-1}$', $
-                    font_color=dum1.color, transp=dum1.transp, font_size=9, vertical_align=1)
-        p031 = [p031, dum0]
-        p032 = [p032, dum1]
-        t031 = [t031, dumt]
+        t031[l].string = 'A = '+string(coeff[0], f='(f5.1)')+' DN!c'+ $
+                         '$v_D$ = '+string(3d5*(coeff[1]-si_cen)/si_cen, f='(f5.1)')+' km s$^{-1}$!c'+ $
+                         '$v_{nth}$ = '+string(w_nth*3d5/si_cen, f='(f5.1)')+' km s$^{-1}$'
+        p03[l].hide = 0
+        p031[l].hide = 0
+        t031[l].hide = 0
         si_coeff = [[si_coeff], [coeff]]
       endif ; si_win
 
       if mg_win then begin 
         temp_data = (eout.data_list[mg_win_ind])[*, moss[l]]
-        dum0 = plot(mg_wave, temp_data, over=p04[l])
+        p04[l].setdata, mg_wave, temp_data
         p04[l].ystyle = 2
         p04[l].yr = [-10., p04[l].yr[1]]
         p04[l].axes[1].showtext=1
         p04[l].yticklen = 0.03
-        p04[l].yminor = 1
   ;      p04[l].ytickval = p04[l].ytickval[0:-2]
         
         for m=0, 1 do begin
@@ -301,49 +310,43 @@ plot_spectra :
           p = mpfitfun('iris_mgfit', mg_wavep, temp_datap, mg_err, p_init, $
                        parinfo=lims, perror=g, /quiet, $
                        maxiter=400, status=st, ftol=1d-9)
-          dum1 = plot(mg_wavep, iris_mgfit(mg_wavep, p), '-2r', transp=20, over=p04[l])
+          p041[l, m].setdata, mg_wavep, iris_mgfit(mg_wavep, p)
           mg_rvpos = iris_postfit_gen(mg_wavep, iris_mgfit(mg_wavep, p))
           
           par_pos = ([1133., 1345.]/win_dim[0])[m]
           mg_cen = ([mg_k_cen, mg_h_cen])[m]
           kh = (m eq 0) ? 'k' : 'h'
-          dumt = text(par_pos, p04[l].pos[3]-0.07, $
-                      '$v_{'+kh+'3}$ = '+string((mg_rvpos[8]-mg_cen)*3d5/mg_cen, f='(f5.2)')+' km s$^{-1}$', $
-                      font_color=dum1.color, transp=dum1.transp, font_size=10, vertical_align=1)
-          p042 = [p042, dum1]
-          t041 = [t041, dumt] 
-        endfor
-        p041 = [p041, dum0]  
-        dumt0 = text(mean(p04[l].pos[[0, 2]]), p04[l].pos[3]-0.05, $
-                     strmid(anytim(eout.sg_phy[2, moss[l]], /ccsds), 0, 19)+'!c'+$
-                     '(' +string(eout.sg_phy[0, moss[l]], f='(f7.2)')+$
-                     ', '+string(eout.sg_phy[1, moss[l]], f='(f7.2)')+')', $
-                     font_size=12, font_name='malgun gothic', font_style=1, $
-                     align=0.5)
-        t040 = [t040, dumt0]
+          t041[l, m].string = '$v_{'+kh+'3}$ = '+string((mg_rvpos[8]-mg_cen)*3d5/mg_cen, f='(f5.2)')+' km s$^{-1}$'
+          p041[l, m].hide = 0
+          t041[l, m].hide = 0 
+        endfor  
+        t040[l].string = strmid(anytim(eout.sg_phy[2, moss[l]], /ccsds), 0, 19)+'!c'+$
+                        '(' +string(eout.sg_phy[0, moss[l]], f='(f7.2)')+$
+                        ', '+string(eout.sg_phy[1, moss[l]], f='(f7.2)')+')'
+        p04[l].hide = 0
       endif               
     endfor
 ;    stop
 ;    timestamp = video.put(stream, w1.copywindow())
-    w1.save, sav_dir + path_sep() + png_name, resol=200
+    w1.save, sav_dir + path_sep() + png_name, resol=130
     
-    for l=0, n_elements(p031)-1 do begin
-      p03[l].yticklen = 0
-      p03[l].yshowtext = 0
-      p031[l].delete
-      p032[l].delete
-      t031[l].delete
-    endfor
-    for l=0, n_elements(p041)-1 do begin
-      p04[l].yshowtext = 0
-      p04[l].yticklen = 0
-      p041[l].delete
-      t040[l].delete
-      for m=0, 1 do begin
-        p042[l*2+m].delete
-        t041[l*2+m].delete
+    if count ne 0 then begin
+      for l=0, nplot-1 do begin
+        p03[l].yticklen = 0
+        p03[l].yshowtext = 0
+        p03[l].hide = 1
+        p031[l].hide = 1
+        t031[l].hide = 1
+        p04[l].yshowtext = 0
+        p04[l].yticklen = 0
+        p04[l].hide = 1
+        t040[l].hide = 1
+        for m=0, 1 do begin
+          p041[l, m].hide = 1
+          t041[l, m].hide = 1
+        endfor
       endfor
-    endfor
+    endif
 
     if rep ne 0 then begin
       moss = moss[nplot:*]
