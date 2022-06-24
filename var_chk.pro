@@ -1,12 +1,14 @@
-pro var_chk, curve, dt, fwhm
+pro var_chk, curve0, dt, fwhm, i_0
+  curve = curve0
+  curve[where(curve lt 0., /null)] = 0.
   t_lim_sji = n_elements(curve)/2
   binsize = 50
   dum = histogram(curve, loc=xbin, binsize=binsize)
   i_0 = xbin[(where(dum eq max(dum)))[0]] + 0.5*binsize
   d_curve = curve[1:*] - curve[0:-2]
   peak_ind = where(sgn(d_curve[1:*]) - sgn(d_curve[0:-2]) eq -2) + 1
-  exc_peak_val = curve[peak_ind+1]-i_0
-  the_peak_ind = peak_ind[where(exc_peak_val gt 3.*stddev(curve) and $
+  exc_peak_val = curve[peak_ind]-i_0
+  the_peak_ind = peak_ind[where(exc_peak_val gt 3.*stddev(curve-i_0) and $
                                  abs(peak_ind-t_lim_sji) le 30./dt, $
                                  count)]
 ;  stop
