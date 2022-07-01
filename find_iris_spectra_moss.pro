@@ -121,8 +121,7 @@ endif
   aia193_value = !null
   
   si_iv_fit_res = !null
-  mg_ii_k_fit_res = !null
-  mg_ii_h_fit_res = !null
+  mg_ii_fit_res = !null
   
   for i=0, n_elements(sg_files)-1 do begin ; raster file no
     dd = iris_obj(sg_files[i])
@@ -235,16 +234,16 @@ endif
         
         if si_iv_ind ge 0 then begin
           dum = (dd->getvar(si_iv_ind))[*, spec_yind[k], j]
-          si_spec = dd->descale_array(dum)
+          si_spec = (dd->descale_array(dum)) / sg_expt[j, si_iv_ind]
           si_iv_fit_res0 = si_iv_fit(wave_list[Si_IV_ind], si_spec)
         endif else si_iv_fit_res0 = 0
         
         if mg_ii_ind ge 0 then begin
           dum = (dd->getvar(mg_ii_ind))[*, spec_yind[k], j]
-          mg_spec = dd->descale_array(dum)
+          mg_spec = (dd->descale_array(dum)) / sg_expt[j, mg_ii_ind]
           mg_ii_fit_res0 = mg_ii_fit(wave_list[mg_ii_ind], mg_spec)
         endif else mg_ii_fit_res0 = [0, 0]
-        stop
+;        stop
   ; save variables
         for l=0, nwin-1 do begin  ; for spectral windows
           dum = (dd->getvar(l))[*, spec_yind[k], j]
@@ -265,8 +264,7 @@ endif
         aia_ypix = interpol(findgen(n_elements(aia_yp)), aia_yp, ypos)
         aia193_value = [aia193_value, interpolate(aia193_data[*, *, match_aia193], aia_xpix, aia_ypix)]
         si_iv_fit_res = [si_iv_fit_res, si_iv_fit_res0]
-        mg_ii_k_fit_res = [mg_ii_k_fit_res, mg_ii_fit_res0[0]]
-        mg_ii_h_fit_res = [mg_ii_k_fit_res, mg_ii_fit_res0[1]]
+        mg_ii_fit_res = [[mg_ii_fit_res], [mg_ii_fit_res0]]
 ;      stop
       endfor ;sg pixels
 ;    if strmatch(aia193_index[match_aia193].date_obs, '*09:42:29*') eq 1 then stop
@@ -284,8 +282,7 @@ endif
             aia_ind:aia_ind, aia_phy:aia_phy, aia_shift:aia_shift, $
             aia193_value:aia193_value, zcube:zcube, sji_wave:sji_index[0].twave1, $
             sg_files:sg_files, sji_files:sji_files, aia_files:aia_files, $
-            si_iv_fit_res:si_iv_fit_res, $
-            mg_ii_k_fit_res:mg_ii_k_fit_res, mg_ii_h_fit_res:mg_ii_h_fit_res, $
+            si_iv_fit_res:si_iv_fit_res, mg_ii_fit_res:mg_ii_fit_res, $
             obj_pix_num:obj_pix_num, moss_num:moss_num}
     save, eout, filename=save_filename
   endif else begin
@@ -299,6 +296,6 @@ endif
   endelse
 ;endif
 
-
 print, 'It takes '+string((systime(/sec)-ti)/6d1, f='(f4.1)')+' min'
+
 end

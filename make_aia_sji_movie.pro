@@ -1,8 +1,11 @@
-pro make_aia_sji_movie, sav_files
+;pro make_aia_sji_movie, sav_files, no_show=no_show
 
 dir = '/Users/khcho/Desktop/IRIS-moss-main/'
 cd, dir
-;sav_files = file_search(dir, '*2020*/*event*.sav', /fully)
+sav_files = file_search(dir, '*2016*/*moss_event*.sav', /fully)
+no_show = 1
+
+if n_elements(no_show) eq 0 then no_show = 0
 
 win_dim = [16d2, 10d2]
 side = 330
@@ -33,7 +36,7 @@ w_th_si = si_cen/3d8*sqrt(8.*alog(2.)*1.38d-23*10d0^(4.9)/(28.0855*1.6605d-27)) 
 w_inst = 0.026  ; in angstrom
 
 for i=0, n_elements(sav_files)-1 do begin
-;for i=12, 12 do begin
+;for i=0, 2 do begin
   print, sav_files[i]
   movie_name = strmid(sav_files[i], 0, strlen(sav_files[i])-3)+'mp4'
   t0 = systime(/sec)
@@ -68,7 +71,7 @@ for i=0, n_elements(sav_files)-1 do begin
             'SJI '+string(eout.sji_wave, f='(i4)')+'$\AA$ ']
 
 ;  stop
-  w1 = window(dim=win_dim, buffer=1)
+  w1 = window(dim=win_dim, buffer=no_show)
   whole_win = plot(indgen(2), /current, /nodata, axis_style=0, pos=[0, 0, 1, 1], $
                    xr=[0, 1], yr=[0, 1])
   im01 = !null
@@ -108,6 +111,7 @@ for i=0, n_elements(sav_files)-1 do begin
   
   p04 = objarr(nplot)
   p041 = objarr(nplot, 2)
+  p042 = objarr(nplot)
   t041 = objarr(nplot, 2)
   t040 = objarr(nplot)
   
@@ -142,7 +146,9 @@ for i=0, n_elements(sav_files)-1 do begin
     endfor
     t040[l] = text(mean(p04[l].pos[[0, 2]]), p04[l].pos[3]-0.05, '  ', $
                   font_size=12, font_name='malgun gothic', font_style=1, $
-                  align=0.5)    
+                  align=0.5)
+    p042[l] = plot([2798.823], [0.], over=p04[l], hide=1, clip=0, $
+                   symbol='o', sym_size=3, sym_thick=3, sym_color='purple')
   endfor
   
   iris_resp = iris_get_response((times[0])[0])
@@ -168,7 +174,6 @@ for i=0, n_elements(sav_files)-1 do begin
     no_obs_t = [no_obs_t, dum0]            
   endif else begin
     mg_wave = eout.wave_list[mg_win_ind]
-    mg_coeff = !null
     mg_dn2phot = iris_resp.dn2phot_sg[1] 
   endelse
   mg_trip_pos = (p04[0].convertcoord(mg_triplet, 0, /data, /to_normal))[0]
@@ -192,7 +197,7 @@ for i=0, n_elements(sav_files)-1 do begin
   dum = floor((times[0]-0.1)/600d0)*600d0
   xtickv = (dum[uniq(dum)])[1:*]
   p05 = plot(times[0], fe_xviii_curve, /current, /dev, $
-             pos=[imx0, 60, win_dim[0]-80, 200], $
+             pos=[imx0, 50, win_dim[0]-80, 200], $
              xstyle=1, xtitle=strmid(anytim((times[0])[0], /ccsds), 0, 10)+' (UT)', $
              xtickv=xtickv, xtickname=strmid(anytim(xtickv, /ccsds), 11, 5), $
              ytitle='Fe XVIII Light Curve', $
@@ -215,17 +220,43 @@ for i=0, n_elements(sav_files)-1 do begin
     for ii = 0, n_elements(eout.curve_fwhm)-1 do begin
       dum = min(abs(t_arr - eout.sg_phy[2, ii]), dum1)
       sg_ind[ii] = dum1 
-      p053 = plot(eout.sg_phy[2, ii]*[1, 1], [(p05yr[1]-p05yr[0])*[0.6, 0.8]+p05yr[0]], over=p05, $
+      p053 = plot(eout.sg_phy[2, ii]*[1, 1], [(p05yr[1]-p05yr[0])*[0.6, 0.7]+p05yr[0]], over=p05, $
                   '-2r')
+      if eout.mg_ii_fit_res[2, ii].emiss gt 0 then begin
+        p054 = plot(eout.sg_phy[2, ii]*[1, 1], [(p05yr[1]-p05yr[0])*[0.7, 0.8]+p05yr[0]], over=p05, $
+                  '-2', color='purple')
+      endif
     endfor
   endif else sg_ind = !null
+  
+  if eout.moss_num gt 0 then dum = where(eout.mg_ii_fit_res[2, *].emiss gt 0, num_mg_trip) $
+                        else num_mg_trip = 0
+  t051 = text(p05.pos[2]-0.01, p05.pos[3]+0.008, $
+              '# of Mg II Triplet : '+string(num_mg_trip, f='(i0)'), $
+              color='purple', font_size=12, font_name='malgun gothic', font_style=1, $
+              align=1)
+  t052 = text(t051.pos[0]-0.03, p05.pos[3]+0.008, $
+              '# of detected moss : '+string(eout.moss_num, f='(i0)'), $
+              color='red', font_size=12, font_name='malgun gothic', font_style=1, $
+              align=1)              
+  t053 = text(t052.pos[0]-0.03, p05.pos[3]+0.008, $
+              '# of moss on slit : '+string(eout.obj_pix_num, f='(i0)'), $
+              color='red', font_size=12, font_name='malgun gothic', font_style=0, $
+              align=1)
+
 ;  stop
 ;================================================================
   percent = !null
   match0 = intarr(4) - 1
   match1 = intarr(4)
-  for j=0, n_elements(t_arr)-1 do begin
+
+;  for j=0, n_elements(t_arr)-1 do begin
 ;  for j=163, 108 do begin
+
+  uniq_sg_ind = sg_ind[uniq(sg_ind, sort(sg_ind))]
+  for jj=0, n_elements(uniq_sg_ind)-1 do begin
+    j = uniq_sg_ind[jj]
+    
     dum = floor(10.*j/(n_elements(t_arr)-1))*10
     if dum ne percent then begin
       print, string(dum, f='(i3)')+' %'
@@ -298,20 +329,15 @@ plot_spectra :
         p03[l].yr = [-3, p03[l].yr[1]*1.2]
         p03[l].axes[1].showtext=1
         p03[l].yticklen=0.07
-  ;      p03[l].ytickval = p03[l].ytickval[0:-2]
-        si_err = sqrt((temp_datap*si_dn2phot) > 0)/si_dn2phot + 1.
-        si_err[si_err lt 1.] = 1e5
-        fit_res = gaussfit(si_wavep, temp_datap, coeff, nterms=4, measure_error=si_err, estimates=[30., si_cen, 1d-2, 0.])
-        p031[l].setdata, si_wavep, fit_res
-        w_fwhm = 2.*sqrt(2.*alog(2.))*coeff[2]
-        w_nth = sqrt(w_fwhm^2. - w_th_si^2. - w_inst^2.)
-        t031[l].string = 'A = '+string(coeff[0], f='(f0.1)')+' DN!c'+ $
-                         '$v_D$ = '+string(3d5*(coeff[1]-si_cen)/si_cen, f='(f0.1)')+' km s$^{-1}$!c'+ $
-                         '$v_{nth}$ = '+string(w_nth*3d5/si_cen, f='(f0.1)')+' km s$^{-1}$'
+
+        si_res = eout.si_iv_fit_res[moss[l]]
+        p031[l].setdata, si_wavep, gaussian(si_wavep, si_res.coeff) 
+        t031[l].string = 'A = '+string(si_res.coeff[0], f='(f0.1)')+' DN!c'+ $
+                         '$v_D$ = '+string(si_res.v_d, f='(f0.1)')+' km s$^{-1}$!c'+ $
+                         '$v_{nth}$ = '+string(si_res.v_nth, f='(f0.1)')+' km s$^{-1}$'
         p03[l].hide = 0
         p031[l].hide = 0
         t031[l].hide = 0
-        si_coeff = [[si_coeff], [coeff]]
       endif ; si_win
 
       if mg_win then begin 
@@ -329,42 +355,28 @@ plot_spectra :
         t040[l].hide = 0
         p04[l].hide = 0        
         for m=0, 1 do begin
-          mg_dr = ([[mg_k_dr], [mg_h_dr]])[*, m]
+          mg_res = eout.mg_ii_fit_res[m, moss[l]]
+          mg_dr = mg_res.wr
           cenp = where((mg_wave ge mg_dr[0]) and (mg_wave le mg_dr[1]))
           mg_wavep = mg_wave[cenp]
           mg_wavepn = dindgen(1d4)*(mg_wavep[-1]-mg_wavep[0])*1d-4 + mg_wavep[0]
-          temp_datap = temp_data[cenp]
-          mg_err = sqrt(temp_datap*mg_dn2phot)/mg_dn2phot + 1.
-          mg_err[mg_err lt 1.] = 1e5
-          lims = {value:0., fixed:0, limited:[0, 0], limits:[0., 0.]}
-          lims = replicate(lims, 9)
-          lims[0].limited[0] = 1 & lims[0].limits[0] = 0d    ; background
-          lims[1].limited[*] = 1 & lims[1].limits = [1e-5, 1d1]   ; linear slope
-          lims[2].limited[*] = 1 & lims[2].limits = mean(mg_dr) + 0.5*[-1, 1]   ; centeroid of linear slope
-          lims[3].limited[0] = 1 & lims[3].limits[0] = 150d0   ; positive Gaussian amplitude
-          lims[4].limited[*] = 1 & lims[4].limits = mean(mg_dr) + 0.6*[-1, 1]   ; centeroid of positive Gaussian
-          lims[6].limited[*] = 1 & lims[6].limits = [0, 20] ; fractional of negative Gaussian amplitude
-          lims[7].limited[*] = 1 & lims[7].limits = mean(mg_dr) + 0.4*[-1, 1]  ; centeroid of negative Gaussian
-          lims[8].limited[1] = 1 & lims[8].limits[1] = 0.1
-          p_init = [0, 1d0, mean(mg_dr), 1d3, mean(mg_dr), 0.04, 0.95, mean(mg_dr), 0.01]
-          p = mpfitfun('iris_mgfit', mg_wavep, temp_datap, mg_err, p_init, $
-                       parinfo=lims, perror=g, /quiet, $
-                       maxiter=400, status=st, ftol=1d-9)             
-          p041[l, m].setdata, mg_wavepn, iris_mgfit(mg_wavepn, p)
-          mg_rvpos = iris_postfit_gen(mg_wavepn, iris_mgfit(mg_wavepn, p))
+          p041[l, m].setdata, mg_wavepn, iris_mgfit(mg_wavepn, mg_res.coeff)
           par_pos = ([1133., 1343.]/win_dim[0])[m]
-          mg_cen = ([mg_k_cen, mg_h_cen])[m]
           kh = (m eq 0) ? 'k' : 'h'
-;          print, p
-          t041[l, m].string = '$v_{'+kh+'3}$ = '+string((mg_rvpos[8]-mg_cen)*3d5/mg_cen, f='(f0.2)')+' km s$^{-1}$'
+          t041[l, m].string = '$v_{'+kh+'3}$ = '+string(mg_res.v_d_3, f='(f0.2)')+' km s$^{-1}$'
           p041[l, m].hide = 0
           t041[l, m].hide = 0 
-;          stop
-        endfor  
+        endfor
+        
+        if eout.mg_ii_fit_res[2, moss[l]].emiss gt 0 then begin
+          dum = min(abs(mg_wave - 2798.823), mg_trip_ind)
+          p042[l].setdata, [2798.823], temp_data[mg_trip_ind]
+          p042[l].hide = 0
+        endif
       endif               
     endfor
     p051.setdata, (times[0])[0:ind1+j], [[fe_xviii_curve[0:ind1+j]], [fltarr(ind1+j+1)+p05.yr[0]]]
-
+;    stop
     w1.save, png_name, resol=130
     
     if count ne 0 then begin
@@ -382,6 +394,7 @@ plot_spectra :
           p041[l, m].hide = 1
           t041[l, m].hide = 1
         endfor
+        p042[l].hide = 1
       endfor
     endif
 
@@ -395,11 +408,12 @@ plot_spectra :
     endif 
   endfor ; j
   w1.close
-;  video.cleanup
   png_files = file_search(sav_dir, '*.png')
   ffmpeg, png_files, output = strmid(sav_files[i], 0, strlen(sav_files[i])-3)+'mp4'
   print, 'It took '+string((systime(/sec)-t0)/60., f='(f0.2)')+' min'
 endfor ; i
 data = 0
 indices = 0
+eout = 0
+times = 0
 end
