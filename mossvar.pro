@@ -3,7 +3,7 @@ demfilter=demfilter, variability=variability, rundem=rundem, movie=movie, netfil
 fexviii=fexviii,cleanflare=cleanflare,loopfilter=loopfilter, cnetfilter=cnetfilter, filter1700=filter1700,skip1700=skip1700, $
 cube_data=cube_data,wavecorr=wavecorr, read=read, manual_data=manual_data, filebychannel=filebychannel, timecorr=timecorr,$
 paper_data=paper_data,demrestore=demrestore,localcube=localcube,local_movie=local_movie, $
-sdo_files=sdo_files
+sdo_files=sdo_files, dem_save_path=dem_save_path
 
 ; See this paper. https://ui.adsabs.harvard.edu/abs/2019ApJ...880L..12G/abstract
 ; 
@@ -36,7 +36,7 @@ channels = ['94','131','171','193','211','335','1600','1700']
 n_channels = n_elements(channels)
 
 empty = 0.
-
+if ~keyword_set(dem_save_path) then dem_save_path = areg+'/dem/'
 
 ;##############################################################
 if keyword_set(read) then begin
@@ -520,7 +520,7 @@ endfor
 
 mash['fe18'] = fe18
 print,'Fe XVIII mask created'
-
+save, fe18, filename=dem_save_path+'/Fe_XVIII_cube.sav'
 endif
 
 
@@ -573,31 +573,32 @@ endif
 ;dem_blos_imgplot.pro
 ;imgplot.pro
 
-if keyword_set(rundem) then begin
+dfiles = find_files('emcube'+tag+'.sav',dem_save_path)
 
-temp_array = 5.5+findgen(21)*0.1
-
-;t0 should be set to current data time
-t0 = mash['aia_193'].index[0].date_obs
-
-aia_sparse_em_init, use_lgtaxis = temp_array, timedepend=t0, bases_sigmas=[0.0,0.1,0.2,0.6]
-
-mash['temp_array'] = temp_array
-
-
-file_mkdir,areg+'/dem/'
-
-dem4moss_cube,mash,dembinning,areg+'/dem/',/makedem,/save
+if keyword_set(rundem) and strlen(dfiles) eq 0 then begin
+  temp_array = 5.5+findgen(21)*0.1
+  
+  ;t0 should be set to current data time
+  t0 = mash['aia_193'].index[0].date_obs
+  
+  aia_sparse_em_init, use_lgtaxis = temp_array, timedepend=t0, bases_sigmas=[0.0,0.1,0.2,0.6]
+  
+  mash['temp_array'] = temp_array
+  
+  
+  file_mkdir, dem_save_path
+  
+  dem4moss_cube, mash, dembinning, dem_save_path, /makedem, /save
 
 endif
-
+;stop
 ;##############################################################
 
 ;run DEM filters, remove transient brightenings
 
 if keyword_set(demfilter) then begin
 
-dfiles = find_files('emcube'+tag+'.sav',areg+'/dem')
+dfiles = find_files('emcube'+tag+'.sav',dem_save_path)
 
 ;if keyword_set(demrestore) then begin
 	restore,dfiles
@@ -765,7 +766,7 @@ endif
 ;	zmatch = zmatch - (zmatch AND outputs.carbon)
 ;	print,'1600/1700 filter done'
 ;endif
-plot_image,total(zmatch,3) gt 1
+;plot_image,total(zmatch,3) gt 1
 
 
 if mash['dem mask done'] eq 1 then begin
@@ -789,7 +790,7 @@ mash['zmatch no loop'] = zmatch
 mash['zmatch'] = zmatch_d
 
 
-plot_image,total(zmatch,3) gt 1
+;plot_image,total(zmatch,3) gt 1
 ;stop
 
 endif
