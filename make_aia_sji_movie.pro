@@ -31,7 +31,7 @@ mg_k_cen = 2796.3501d0
 mg_triplet = 2798.823d0
 si_dr = si_cen + 1.*[-1, 1]
 mg_h_dr = mg_h_cen + 2.*[-1, 1]
-mg_k_dr = mg_k_cen + 2.*[-1, 1]
+mg_k_dr = mg_k_cen + 2.*[-1, 1]1
 w_th_si = si_cen/3d8*sqrt(8.*alog(2.)*1.38d-23*10d0^(4.9)/(28.0855*1.6605d-27))  ; in angstrom
 w_inst = 0.026  ; in angstrom
 
