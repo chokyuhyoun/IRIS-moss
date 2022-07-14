@@ -1,4 +1,4 @@
-pro var_chk, curve0, dt, fwhm, i_0
+pro var_chk, curve0, dt, fwhm, i_0, the_peak_ind
   curve = curve0
   curve[where(curve lt 0., /null)] = 0.
   t_lim_sji = n_elements(curve)/2
@@ -8,7 +8,7 @@ pro var_chk, curve0, dt, fwhm, i_0
   d_curve = curve[1:*] - curve[0:-2]
   peak_ind = where(sgn(d_curve[1:*]) - sgn(d_curve[0:-2]) eq -2) + 1
   exc_peak_val = curve[peak_ind]-i_0
-  the_peak_ind = peak_ind[where(exc_peak_val gt 3.*stddev(curve-i_0) and $
+  the_peak_ind = peak_ind[where(exc_peak_val gt 3.*stddev(curve-i_0, /nan) and $
                                  abs(peak_ind-t_lim_sji) le 30./dt, $
                                  count)]
 ;  stop

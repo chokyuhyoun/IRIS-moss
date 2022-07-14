@@ -113,6 +113,7 @@ endif
   sji_ind = !null ; [xpix, ypix, t] index for IRIS SJI cube
   sji_phy = !null ; sji time
   curve_fwhm = !null
+  curve_peak_ind = !null
   si_iv_curve = !null
   si_iv_time = !null
   
@@ -217,20 +218,22 @@ endif
           curve_dt = sji_index[0].cdelt3
           t_lim_ind = t_lim_sji
         endelse
+        if n_elements(si_iv_curve0) lt 2*t_lim_ind + 1 then begin
+          deficit = 2*t_lim_ind+1-n_elements(si_iv_curve0)
+          if match_sji lt 0.5*n_elements(sji_index) then begin
+            si_iv_curve0 = [fltarr(deficit)*!values.f_nan, si_iv_curve0]
+            si_iv_time0 = [fltarr(deficit)*!values.f_nan, si_iv_time0]
+          endif else begin
+            si_iv_curve0 = [si_iv_curve0, fltarr(deficit)*!values.f_nan]
+            si_iv_time0 = [si_iv_time0, fltarr(deficit)*!values.f_nan]
+          endelse
+        endif
         curve_fwhm0 = !null
-        var_chk, si_iv_curve0, curve_dt, curve_fwhm0, i_0
+        var_chk, si_iv_curve0, curve_dt, curve_fwhm0, i_0, curve_peak_ind0
 ;        stop
         if n_elements(curve_fwhm0) eq 0 then continue
         moss_num += 1
-        if n_elements(si_iv_curve0) lt 2*t_lim_ind + 1 then begin
-          if match_sji lt 0.5*n_elements(sji_index) then begin
-            si_iv_curve0 = [fltarr(2*t_lim_ind+1-n_elements(si_iv_curve0))*!values.f_nan, si_iv_curve0]
-            si_iv_time0 = [fltarr(2*t_lim_ind+1-n_elements(si_iv_time0))*!values.f_nan, si_iv_time0]
-          endif else begin
-            si_iv_curve0 = [si_iv_curve0, fltarr(2*t_lim_ind+1-n_elements(si_iv_curve0))*!values.f_nan]
-            si_iv_time0 = [si_iv_time0, fltarr(2*t_lim_ind+1-n_elements(si_iv_time0))*!values.f_nan]
-          endelse
-        endif
+
         
         if si_iv_ind ge 0 then begin
           dum = (dd->getvar(si_iv_ind))[*, spec_yind[k], j]
@@ -256,6 +259,7 @@ endif
         si_iv_curve = [[si_iv_curve], [si_iv_curve0]]
         si_iv_time = [[si_iv_time], [si_iv_time0]]
         curve_fwhm = [curve_fwhm, curve_fwhm0]
+        curve_peak_ind = [curve_peak_ind, curve_peak_ind0]
         aia_ind = [[aia_ind], [moss_ind_spec[*, k], match_aia193]]
         aia_phy = [[aia_phy], $
           [moss_xp[real_ind[0, k]], moss_yp[real_ind[0, k]], aia193_time[match_aia193]]]
@@ -278,7 +282,7 @@ endif
             sg_ind:sg_ind, sg_phy:sg_phy, $
             sji_ind:sji_ind, sji_phy:sji_phy, $
             curve_fwhm:curve_fwhm, si_iv_curve:si_iv_curve, si_iv_time:si_iv_time, $
-            sji_dt:sji_index[0].cdelt3, $
+            curve_dt:curve_dt, curve_peak_ind:curve_peak_ind, $
             aia_ind:aia_ind, aia_phy:aia_phy, aia_shift:aia_shift, $
             aia193_value:aia193_value, zcube:zcube, sji_wave:sji_index[0].twave1, $
             sg_files:sg_files, sji_files:sji_files, aia_files:aia_files, $
