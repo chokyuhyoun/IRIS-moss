@@ -15,6 +15,7 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
 ;P[8]=width^2 of negative gaussian
 ;
 ;OUTPUTS: Vector of same size as X with the line profile
+;; positive Doppler velocity --> upward motion (blueshift)
 
   if n_elements(dn2phot) eq 0 then dn2phot = 18.  ; Please check using iris_get_response(time)
 
@@ -38,26 +39,27 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
 
     mg_err = sqrt(specp*dn2phot)/dn2phot + 1.
     mg_err[where(mg_err lt 1., /null)] = 1e5
+;    mg_err[*] = 1.
 
-    if n_elements(init) eq 0 then init0 = [0, 1d0, mean(mg_dr), 1d3, mean(mg_dr), 0.04, 0.95, mean(mg_dr), 0.01] $
+    if n_elements(init) eq 0 then init0 = [0, 1d0, mean(mg_dr), 1d3, mean(mg_dr), 0.1, 0.95, mean(mg_dr), 0.02] $
                              else init0 = init
     lims = {value:0., fixed:0, limited:[0, 0], limits:[0., 0.]}
     lims = replicate(lims, 9)
     lims[0].limited[0] = 1 & lims[0].limits[0] = 0d                      ; background
     lims[1].limited[*] = 1 & lims[1].limits = [1e-5, 1d1]                ; linear slope
     lims[2].limited[*] = 1 & lims[2].limits = mean(mg_dr) + 0.5*[-1, 1]   ; centeroid of linear slope
-    lims[3].limited[0] = 1 & lims[3].limits[0] = 150d0                   ; positive Gaussian amplitude
-    lims[4].limited[*] = 1 & lims[4].limits = mean(mg_dr) + 0.6*[-1, 1]   ; centeroid of positive Gaussian
-    lims[6].limited[*] = 1 & lims[6].limits = [0, 20]                    ; fractional of negative Gaussian amplitude
-    lims[7].limited[*] = 1 & lims[7].limits = mean(mg_dr) + 0.4*[-1, 1]   ; centeroid of negative Gaussian
-    lims[8].limited[1] = 1 & lims[8].limits[1] = 0.1
+    lims[3].limited[*] = 1 & lims[3].limits = [150d0, 1d4]                ; positive Gaussian amplitude
+    lims[4].limited[*] = 1 & lims[4].limits = mean(mg_dr) + 1.*[-1, 1]   ; centeroid of positive Gaussian
+    lims[6].limited[*] = 1 & lims[6].limits = [0, 1]                    ; fractional of negative Gaussian amplitude
+    lims[7].limited[*] = 1 & lims[7].limits = mean(mg_dr) + 1.*[-1, 1]   ; centeroid of negative Gaussian
+    lims[8].limited[1] = 1 & lims[8].limits[1] = 0.2
     p = mpfitfun('iris_mgfit', wavep, specp, mg_err, init0, $
-                  parinfo=lims, perror=g, quiet=1, $
+                  parinfo=lims, perror=g, quiet=1, weights=1d/specp, $
                   maxiter=400, status=st, ftol=1d-9)
     fit_res = iris_mgfit(wavepn, p)              
     mg_rvpos = iris_postfit_gen(wavepn, fit_res)
-    v_d_3 = (mg_rvpos[8]-mg_cen)*3d5/mg_cen
-    chisq = total((specp-iris_mgfit(wavep, p)/mg_err)^2.)
+    v_d_3 = -(mg_rvpos[8]-mg_cen)*3d5/mg_cen
+    chisq = total((specp-iris_mgfit(wavep, p))^2./mg_err)
     res[i].coeff = p
     res[i].v_d_3 = (mg_rvpos[10] eq 1) ? v_d_3 : !values.f_nan
     res[i].wr = mg_dr

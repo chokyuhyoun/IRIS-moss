@@ -1,11 +1,14 @@
-;pro make_aia_sji_movie, sav_files, no_show=no_show
+pro make_aia_sji_movie, sub_dir, show=show, maintain=maintain
 
 dir = '/Users/khcho/Desktop/IRIS-moss-main/'
 cd, dir
-sav_files = file_search(dir, '*2016*/*moss_event*.sav', /fully)
-no_show = 1
 
-if n_elements(no_show) eq 0 then no_show = 0
+sav_str = keyword_set(maintain) ? '*moss_event*.sav' : '*event*.sav' 
+f = file_search(dir, sav_str, /fully)
+dum = strmatch(f, '*'+sub_dir+'*')
+sav_files =f[where(dum)]
+;sav_files = file_search(dir, sub_dir+'/*/*_event*.sav', /fully)
+if ~keyword_set(show) then no_show = 1 else no_show = 0
 
 win_dim = [16d2, 10d2]
 side = 330
@@ -251,13 +254,11 @@ for i=0, n_elements(sav_files)-1 do begin
   match0 = intarr(4) - 1
   match1 = intarr(4)
 
-  for j=0, n_elements(t_arr)-1 do begin
-;  for j=163, 108 do begin
-
-;  uniq_sg_ind = sg_ind[uniq(sg_ind, sort(sg_ind))]
-;  for jj=0, n_elements(uniq_sg_ind)-1 do begin
-;    j = uniq_sg_ind[jj]
-    
+  uniq_sg_ind = sg_ind[uniq(sg_ind, sort(sg_ind))]
+  object_t = (~keyword_set(maintain)) ? t_arr : uniq_sg_ind  
+  for jj=0, n_elements(object_t)-1 do begin
+    j = (~keyword_set(maintain)) ? jj : uniq_sg_ind[jj] 
+   
     dum = floor(10.*j/(n_elements(t_arr)-1))*10
     if dum ne percent then begin
       print, string(dum, f='(i3)')+' %'
@@ -316,7 +317,7 @@ for i=0, n_elements(sav_files)-1 do begin
 plot_spectra :
     rep = (count-1)/nplot
     png_name = (count gt 0) ? sav_dir+path_sep()+string(j, f='(i05)')+'_moss'+string(page, f='(i01)')+'.png' $
-      : sav_dir+path_sep()+string(j, f='(i05)')+'.png'
+                            : sav_dir+path_sep()+string(j, f='(i05)')+'.png'
 
     for l = 0, count-1 do begin  ; Spectrograph data
       if l ge 5 then continue
@@ -326,10 +327,10 @@ plot_spectra :
         si_wavep = si_wave[cenp]
         temp_datap = temp_data[cenp]
         p03[l].setdata, si_wavep, temp_datap
-        p03[l].ystyle =2 
-        p03[l].yr = [-3, p03[l].yr[1]*1.2]
         p03[l].axes[1].showtext=1
         p03[l].yticklen=0.07
+        p03[l].ystyle = 1
+        p03[l].yr = [-3, max(temp_datap)*1.3]
 
         si_res = eout.si_iv_fit_res[moss[l]]
         p031[l].setdata, si_wavep, gaussian(si_wavep, si_res.coeff) 
@@ -345,11 +346,11 @@ plot_spectra :
         temp_data = (eout.data_list[mg_win_ind])[*, moss[l]]
         dum = where((mg_wave ge p04[l].xr[0]) and (mg_wave le p04[l].xr[1]))
         p04[l].setdata, mg_wave[dum], temp_data[dum]
-        p04[l].ystyle = 2
-        p04[l].yr = [-10., p04[l].yr[1]]
         p04[l].axes[1].showtext = 1
         p04[l].yticklen = 0.03
-  ;      p04[l].ytickval = p04[l].ytickval[0:-2]
+        p04[l].ystyle = 1
+        p04[l].yr = [-10., max(temp_data[dum])*1.2]
+
         t040[l].string = strmid(anytim(eout.sg_phy[2, moss[l]], /ccsds), 0, 19)+'!c'+$
                         '(' +string(eout.sg_phy[0, moss[l]], f='(f7.2)')+$
                         ', '+string(eout.sg_phy[1, moss[l]], f='(f7.2)')+')'

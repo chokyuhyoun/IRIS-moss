@@ -87,9 +87,6 @@ if n_elements(sg_files) eq 0 then begin
 endif
 
 ;; RUN MOSSVAR ON AIA CUBE TO DETECT EVENTS
-;mossvar_save_name = aia_dir+'/mossvar_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
-;prev_sav_files = file_search(aia_dir, mossvar_save_name, count=count)
-;if count eq 0 then begin
   mossvar, aia_dir, '', mash, 4, 4,/read, /cube_data
   if mash['status'] ne 'data ok' then begin
     print, 'Failed to find moss structure from AIA data.'
@@ -99,13 +96,10 @@ endif
           /demfilter, /rundem, dem_save_path=out_dir
   mossvar, aia_dir, '', mash, 4, 4, /variability, /cleanflare
 
-;  save, mash, filename=mossvar_save_name  
-;endif else begin
-;;if file_exist(save_filename) then begin
-;  restore, mossvar_save_name
-;endelse
-;stop
   zcube = mash['zmatch no loop']
+  err_t = where(total(total(zcube, 1), 1) gt 100, /null)
+  for ii=0, n_elements(err_t)-1 do zcube[*, *, err_t[ii]] = 0
+  
   ; VARIABLES TO SAVE
   sg_ind = !null ;; [ypix, scan #, file #]
   sg_phy = !null
@@ -130,6 +124,7 @@ endif
     sg_yp = dd->getypos()
     sg_time = anytim(tai2utc(dd->ti2tai(), /stime))
     iris_resp = iris_get_response((dd->ti2utc())[0])
+    sg_dy = dd->getresy()
     if i eq 0 then begin
       nwin = dd->getnwin()
       line_id = dd->getline_id()
@@ -279,7 +274,7 @@ endif
 ;  stop
   if n_elements(data_list[0]) ne 0 then begin
     eout = {data_list:data_list, wave_list:wave_list, line_id:line_id, $
-            sg_ind:sg_ind, sg_phy:sg_phy, $
+            sg_ind:sg_ind, sg_phy:sg_phy, sg_dy:sg_dy, $
             sji_ind:sji_ind, sji_phy:sji_phy, $
             curve_fwhm:curve_fwhm, si_iv_curve:si_iv_curve, si_iv_time:si_iv_time, $
             curve_dt:curve_dt, curve_peak_ind:curve_peak_ind, $
