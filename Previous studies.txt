@@ -1,0 +1,65 @@
+moss spectra paper
+
+* IRIS Observations of Short-term Variability in Moss Associated with 
+  Transient Hot Coronal Loops (Testa et al. 2020)
+  - https://ui.adsabs.harvard.edu/abs/2020ApJ...889..124T/abstract
+  - high variability moss spectra observed by IRIS
+  - Comparison with 1D RADYN simulation
+     - E source : thermal conduction / nonthermal electrons
+  - Mg II triplet can be an indicator of existance of nonthermal electrons
+  - Transition region blueshift, Mg II triplet
+    --> particle acceleration via small magnetic reconnection events.
+  - limitation of models
+    - relatively small Si IV nonthermal broadening in simulation (> 20 km/s)
+       - missing physical processing
+       - simultaneously different heating processes?
+       - only single loop case / viewing angle? (perpendicular to the B fields?)
+    - initial Si IV Doppler velocity = 0 km/s <--> observations
+  - classification of events according to the energy sources.
+    1. Strong evidence of nonthermal electrons. 
+      - Mg II triplet emission & Si IV blueshift (4/10)
+    2. Liely presence of nonthermal electrons.
+      - small Si IV blueshift (3/10)
+    3. Lack of evidence of nonthermal electrons (3/10)
+    
+* Investigating the Response of Loop Plasma to Nanoflare Heating Using RADYN Simulations
+  (Polito et al. 2018)
+  - https://ui.adsabs.harvard.edu/abs/2018ApJ...856..178P/abstract
+  - 1D HD simulation, synthesized intensity and Doppler shift
+  - Nonthermal electrions with high enough low-energy cutoff (Fig. 5)
+      --> Si IV blueshifts (~ 20 km/s), impossible to be reproduce by thermal conduction
+  - significant Si IV enhancements and flow : only for initially low-density loops (10^9 cm^-3)
+  - 
+  - 
+
+
+* (Testa el al. 2014)
+* (Reale et al. 2019a)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
