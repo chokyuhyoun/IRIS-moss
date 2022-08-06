@@ -1,6 +1,7 @@
 pro find_iris_spectra_moss, out_dir, eout, iris_dir=iris_dir, aia_dir=aia_dir
 
 ;out_dir = '/Users/khcho/Desktop/IRIS-moss-main/20160320_110924'
+print, systime()
 ti = systime(/sec)
 obj_pix_num = 0
 moss_num = 0
@@ -15,61 +16,70 @@ if n_elements(aia_dir) eq 0 then aia_dir = out_dir
 if n_elements(iris_dir) eq 0 then iris_dir = out_dir
 sg_files = file_search(iris_dir, 'iris_l2_*raster*.fits')
 sji_files = file_search(iris_dir, 'iris_l2_*SJI*.fits')
-aia_files = file_search(aia_dir, 'aia_l2*.fits')
+aia_files = file_search(aia_dir, 'aia_l2*.fits', count=n)
+if n eq 0 then begin
+  print, 'No avaliable AIA files'
+  save, filename='No_AIA_files.sav'
+  return
+endif
+
 save_filename = out_dir+'/moss_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
 
 dum = where(strmatch(sji_files, '*1400*') eq 1, n)
 if n gt 0 then begin
   read_iris_l2, sji_files[dum], sji_index, sji_data, /sil
   print, 'Use IRIS SJI_1400A for co-alignment'
+  sji_time = anytim(sji_index.date_obs)
+
+  ; Check SJI data & fill up the missed time
+  dum = median(median(sji_data, dim=2), dim=1)
+  miss = where(dum lt 0, miss_n)
+  for i=0, miss_n-1 do begin
+    sji_data[*, *, miss[i]] = 0.5*(sji_data[*, *, miss[i]-1] + sji_data[*, *, miss[i]+1])
+    print, 'Filled '+string(miss[i], f='(i0)')+'th SJI data'
+  endfor
+  
+  dum = where(strmatch(aia_files, '*1600.fits'))
+  read_iris_l2, aia_files[dum], aia1600_index, aia1600_data, /sil
+  
+  aia1600_time = anytim(aia1600_index.date_obs)
+
+  ; co-alignment between AIA 1600 A and SJI 1400 A - 
+  del1 = !null
+  cor1 = !null
+  dum = min(abs(aia1600_time - sji_time[0]), mn)
+  dum = min(abs(aia1600_time - sji_time[-1]), mx)
+  for i=mn, mx do begin
+    dum = min(abs(aia1600_time[i]-sji_time), match)
+    aia_img = aia1600_data[*, *, i]
+    sji_img = sji_data[*, *, match]
+    aia_sji_align, aia_img, aia1600_index[i], $
+                   sji_img, sji_index[match], del0, cor0=cor0
+    del1 = [[del1], [del0]]  
+    cor1 = [cor1, cor0]
+  ;  stop
+  endfor
+  tt = aia1600_time[mn:mx]
+  unvalid = where(cor1 lt 0.4)  ;  empirical value
+  if n_elements(unvalid)*1./n_elements(cor1) gt 0.3 then begin
+    del1[*] = 0.
+  endif else begin
+    del1[*, unvalid] = !values.f_nan
+  endelse
+  
+  aia_shift = [[reform(del1[0, *])], [reform(del1[1, *])], [tt]] ; [delx, dely, time]
 endif else begin
+  print, 'No IRIS SJI_1400A. Use IRIS header information for co-alignment'
   read_iris_l2, sji_files[0], sji_index, sji_data, /sil
-  print, 'No IRIS SJI_1400A. Use IRIS '+sji_index[0].tdesc1+' for co-alignment'
+  sji_time = anytim(sji_index.date_obs)
+  aia_shift = [[fltarr(n_elements(sji_time))], [fltarr(n_elements(sji_time))], [sji_time]]
 endelse
 
-; Check SJI data & fill up the missed time
-dum = median(median(sji_data, dim=2), dim=1)
-miss = where(dum lt 0, miss_n)
-for i=0, miss_n-1 do begin
-  sji_data[*, *, miss[i]] = 0.5*(sji_data[*, *, miss[i]-1] + sji_data[*, *, miss[i]+1])
-  print, 'Filled '+string(miss[i], f='(i0)')+'th SJI data'
-endfor
-
-dum = where(strmatch(aia_files, '*1600.fits'))
-read_iris_l2, aia_files[dum], aia1600_index, aia1600_data, /sil
 dum = where(strmatch(aia_files, '*193.fits'))
 read_iris_l2, aia_files[dum], aia193_index, aia193_data, /sil
 
 ; MAKE TIME ARRAY
-sji_time = anytim(sji_index.date_obs)
-aia1600_time = anytim(aia1600_index.date_obs)
 aia193_time = anytim(aia193_index.date_obs)
-;stop
-; co-alignment between AIA 1600 A and SJI 1400 A - 
-del1 = !null
-cor1 = !null
-dum = min(abs(aia1600_time - sji_time[0]), mn)
-dum = min(abs(aia1600_time - sji_time[-1]), mx)
-for i=mn, mx do begin
-  dum = min(abs(aia1600_time[i]-sji_time), match)
-  aia_img = aia1600_data[*, *, i]
-  sji_img = sji_data[*, *, match]
-  aia_sji_align, aia_img, aia1600_index[i], $
-                 sji_img, sji_index[match], del0, cor0=cor0
-  del1 = [[del1], [del0]]  
-  cor1 = [cor1, cor0]
-;  stop
-endfor
-tt = aia1600_time[mn:mx]
-unvalid = where(cor1 lt 0.4)  ;  empirical value
-if n_elements(unvalid)*1./n_elements(cor1) gt 0.3 then begin
-  del1[*] = 0.
-endif else begin
-  del1[*, unvalid] = !values.f_nan
-endelse
-
-aia_shift = [[reform(del1[0, *])], [reform(del1[1, *])], [tt]] ; [delx, dely, time]
-;stop
 
 aia_sz = size(aia193_data)
 sji_sz = size(sji_data)
@@ -98,7 +108,7 @@ endif
 
   zcube = mash['zmatch no loop']
   err_t = where(total(total(zcube, 1), 1) gt 100, /null)
-  for ii=0, n_elements(err_t)-1 do zcube[*, *, err_t[ii]] = 0
+  zcube[*, *, err_t] = 0
   
   ; VARIABLES TO SAVE
   sg_ind = !null ;; [ypix, scan #, file #]
@@ -135,13 +145,14 @@ endif
         sg_expt = [[sg_expt], [(dd->getexp(iwin=ii))]]
       endfor
     endif
-    Si_IV_ind = (where(strmatch(dd->getline_id(), '*1403*')))[0]
-    mg_ii_ind = (where(strmatch(dd->getline_id(), '*2796*')))[0]
+    Si_IV_ind = (where(strmatch(line_id, '*Si IV*'), /null))[-1]
+    mg_ii_ind = (where(strmatch(line_id, '*2796*'), /null))[0]
     sit_and_stare = dd->getsit_and_stare()
     sg_dt = mean(sg_time[1:*] - sg_time[0:-2])
     t_lim_sg = floor(t_lim*2 / sg_dt)
-    if (Si_IV_ind ne -1) and sit_and_stare then $
+    if (Si_IV_ind ne -1) and sit_and_stare then begin
       Si_IV_int_ind = where(wave_list[Si_IV_ind] gt 1402. and wave_list[Si_IV_ind] lt 1404.)
+    endif else continue ;; only for SI IV obs. and sit-and-stare
     
     
     for j=0, n_elements(sg_xp)-1 do begin ; raster scan no
@@ -199,7 +210,7 @@ endif
           curve_dt = sg_dt
           for l=ind00, ind01 do begin
             dum = reform((dd->getvar(SI_IV_ind))[*, spec_yind[k], l])
-            dum = (dd->descale_array(dum))/ sg_expt[j, si_iv_ind]
+            dum = (dd->descale_array(dum))/ sg_expt[l, si_iv_ind]
             si_iv_curve0 = [si_iv_curve0,  total(dum[Si_IV_int_ind])] 
           endfor
           t_lim_ind = t_lim_sg
@@ -224,6 +235,7 @@ endif
           endelse
         endif
         curve_fwhm0 = !null
+;        if total(finite(si_iv_curve0)) lt 0.5*n_elements(si_iv_curve0) then stop
         var_chk, si_iv_curve0, curve_dt, curve_fwhm0, i_0, curve_peak_ind0
 ;        stop
         if n_elements(curve_fwhm0) eq 0 then continue
@@ -293,8 +305,8 @@ endif
             obj_pix_num:obj_pix_num, moss_num:moss_num}
     save, eout, filename=out_dir+'/No_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
   endelse
+  mash = 0
 ;endif
-
-print, 'It takes '+string((systime(/sec)-ti)/6d1, f='(f4.1)')+' min'
+print, out_dir + ' finished. It takes '+string((systime(/sec)-ti)/6d1, f='(f4.1)')+' min'
 
 end

@@ -1,9 +1,10 @@
 pro run_ar_num, ar_num, movie=movie
   if ~keyword_set(movie) then movie = 1
   str = 'https://www.lmsal.com/hek/hcr?cmd=search-events3&outputformat=json&'+$
-    'startTime=2013-07-20T00:00&stopTime=2022-07-15T00:00&target=AR&maxrasterStepsize=0&'+$
-    'specWindows=Si+IV+1403&hasData=true&hideMostLimbScans=true&obsDesc='$
-    +string(ar_num, f='(i0)')+'&limit=200'
+        'startTime=2013-07-20T00:00&stopTime=2022-07-15T00:00&target=AR&maxrasterStepsize=0&'+$
+        'maxcadMeanAsrun=15&specWindows=Mg+II+k+2796,Mg+II+h+2803,Si+IV+1403&'+$
+        'hasData=true&hideMostLimbScans=true&obsDesc='$
+        +string(ar_num, f='(i0)')    
   hcr=ssw_hcr_query(str)
   
   out_dir_base = '/Users/khcho/Desktop/IRIS-moss-main/'
@@ -33,7 +34,7 @@ pro run_ar_num, ar_num, movie=movie
   obj_destroy, nhcr
   obj_destroy, hcr
   
-  if movie then make_aia_sji_movie, 'ar'+string(ar_num, f='(i0)'), /maintain
+  if movie then make_aia_sji_movie, 'ar'+string(ar_num, f='(i0)'), /moss_only
 end
 
 ;run_ar_num, 12409

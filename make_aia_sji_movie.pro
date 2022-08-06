@@ -1,11 +1,15 @@
-pro make_aia_sji_movie, sub_dir, show=show, maintain=maintain
+pro make_aia_sji_movie, sub_dir, show=show, moss_only = moss_only
 
 dir = '/Users/khcho/Desktop/IRIS-moss-main/'
 cd, dir
 
-sav_str = keyword_set(maintain) ? '*moss_event*.sav' : '*event*.sav' 
+sav_str = keyword_set(moss_only) ? '*moss_event*.sav' : '*event*.sav' 
 f = file_search(dir, sav_str, /fully)
-dum = strmatch(f, '*'+sub_dir+'*')
+dum = strmatch(f, '*'+strcompress(string(sub_dir), /remove_all)+'*')
+if total(dum) eq 0 then begin 
+  print, 'No matching save file'
+  return
+endif
 sav_files =f[where(dum)]
 ;sav_files = file_search(dir, sub_dir+'/*/*_event*.sav', /fully)
 if ~keyword_set(show) then no_show = 1 else no_show = 0
@@ -25,9 +29,8 @@ pxside2 = pxside1*5.
 px1 = win_dim[0]-30
 pyside = (py1-py0)/nplot
 
-wave_list = ['94', '193', '1700', '171', '211', '1600', 'sji']
-wv_inds = [0, 1, 2, 6]
-wv_drange = [[0, 30], [1e2, 5e3], [1e2, 3e3], [0, 255]]
+wave_list = ['94', '193', '1600', 'sji']
+wv_drange = [[0, 30], [1e2, 5e3], [1e1, 3e2], [0, 255]]
 si_cen = 1402.77d
 mg_h_cen = 2803.5310d0
 mg_k_cen = 2796.3501d0
@@ -48,8 +51,8 @@ for i=0, n_elements(sav_files)-1 do begin
   file_mkdir, sav_dir
 
   restore, sav_files[i], /relax
-  Si_win_ind = (where(eout.line_id eq 'Si IV 1403', si_win))[0]
-  Mg_win_ind = (where(eout.line_id eq 'Mg II k 2796', mg_win))[0]
+  Si_win_ind = (where(strmatch(eout.line_id, '*Si IV*'), si_win))[-1]
+  Mg_win_ind = (where(strmatch(eout.line_id, '*Mg II*'), mg_win))[0]
   data = list(len=n_elements(wave_list))
   indices = list(len=n_elements(wave_list))
   times = list(len=n_elements(wave_list))
@@ -65,13 +68,14 @@ for i=0, n_elements(sav_files)-1 do begin
     indices[j] = index0
     times[j] = anytim(index0.date_obs)
   endfor
-  fe_xviii_data = data[0] - data[3]/450. - data[4]/120.
-  fe_xviii_curve = total(total(fe_xviii_data, 1), 1)/(size(data[1]))[1]/(size(data[1]))[2]
+  fe18_file = file_search(file_dirname(sav_files[i]), 'Fe_XVIII_cube.sav')
+  restore, fe18_file ;; fe18
+  fe18_curve = total(total(fe18, 1), 1)/(size(data[1]))[1]/(size(data[1]))[2]
   moss_num_curve = total(total(eout.zcube, 1), 1)
   fovx = (indices[-1])[0].fovx
   fovy = (indices[-1])[0].fovy
   hfov = 0.5*(fovx > fovy)
-  titles = ['Fe XVIII ', 'AIA 193$\AA$ ', 'AIA 1700$\AA$ ', $
+  titles = ['Fe XVIII ', 'AIA 193$\AA$ ', 'AIA 1600$\AA$ ', $
             'SJI '+string(eout.sji_wave, f='(i4)')+'$\AA$ ']
 
 ;  stop
@@ -87,7 +91,7 @@ for i=0, n_elements(sav_files)-1 do begin
       if kk eq 3 then begin
         iris_lct, (indices[-1])[0], rr, gg, bb 
       endif else begin
-        aia_lct, rr, gg, bb, wavelnth=wave_list[wv_inds[kk]], /load
+        aia_lct, rr, gg, bb, wavelnth=wave_list[kk], /load
       endelse
       dum0 = image_kh(hanning(2, 2), /current, /dev, $
                       pos=[imx0+ii*(gap+side),      imy0-jj*(gap+side), $
@@ -117,6 +121,7 @@ for i=0, n_elements(sav_files)-1 do begin
   p041 = objarr(nplot, 2)
   p042 = objarr(nplot)
   t041 = objarr(nplot, 2)
+  t042 = objarr(nplot)
   t040 = objarr(nplot)
   
   for l=0, nplot-1 do begin
@@ -148,11 +153,13 @@ for i=0, n_elements(sav_files)-1 do begin
                         font_color=p041[l, m].color, transp=p041[l, m].transp, $
                         font_size=10, vertical_align=1)
     endfor
+    t042_pos = p04[l].convertcoord(2798.823, 0.25, /data, /to_normal)
+    t042[l] = text(t042_pos[0], t042_pos[1], 'EW = 0 $\AA$', /normal, $
+                   font_size=10, font_name='malgun gothic', font_style=1, $
+                   align=0.5)
     t040[l] = text(mean(p04[l].pos[[0, 2]]), p04[l].pos[3]-0.05, '  ', $
                   font_size=12, font_name='malgun gothic', font_style=1, $
                   align=0.5)
-    p042[l] = plot([2798.823], [0.], over=p04[l], hide=1, clip=0, $
-                   symbol='o', sym_size=3, sym_thick=3, sym_color='purple')
   endfor
   
   iris_resp = iris_get_response((times[0])[0])
@@ -198,9 +205,10 @@ for i=0, n_elements(sav_files)-1 do begin
     t_arr = (times[1])[ind1:ind2]
 ;  endif else t_arr = times[-1]
 
-  dum = floor((times[0]-0.1)/600d0)*600d0
+  tick_int = 1200d0 ; in sec
+  dum = floor((times[0]-0.1)/tick_int)*tick_int
   xtickv = (dum[uniq(dum)])[1:*]
-  p05 = plot(times[0], fe_xviii_curve, /current, /dev, $
+  p05 = plot(times[0], fe18_curve, /current, /dev, $
              pos=[imx0, 50, win_dim[0]-80, 200], $
              xstyle=1, xtitle=strmid(anytim((times[0])[0], /ccsds), 0, 10)+' (UT)', $
              xtickv=xtickv, xtickname=strmid(anytim(xtickv, /ccsds), 11, 5), $
@@ -208,7 +216,7 @@ for i=0, n_elements(sav_files)-1 do begin
              font_size=12, font_name='malgun gothic', font_style=1)
   p05.axes[3].hide = 1
   p05yr = p05.yr
-  p051 = fillplot((times[0])[0:ind1], [[fe_xviii_curve[0:ind1]], [fltarr(ind1+1)+p05.yr[0]]], $
+  p051 = fillplot((times[0])[0:ind1], [[fe18_curve[0:ind1]], [fltarr(ind1+1)+p05.yr[0]]], $
                   over=p05, fill_color='gray', color='gray')
   p052 = plot(times[0], moss_num_curve, /current, pos=p05.pos, $
               color='red', /histogram, ytitle='# of Moss', yminor=0, $
@@ -254,12 +262,12 @@ for i=0, n_elements(sav_files)-1 do begin
   match0 = intarr(4) - 1
   match1 = intarr(4)
 
-  uniq_sg_ind = sg_ind[uniq(sg_ind, sort(sg_ind))]
-  object_t = (~keyword_set(maintain)) ? t_arr : uniq_sg_ind  
+  uniq_sg_ind = (n_elements(sg_ind) ne 0) ? sg_ind[uniq(sg_ind, sort(sg_ind))] : !null
+  object_t = (~keyword_set(moss_only)) ? t_arr : uniq_sg_ind  
   for jj=0, n_elements(object_t)-1 do begin
-    j = (~keyword_set(maintain)) ? jj : uniq_sg_ind[jj] 
+    j = (~keyword_set(moss_only)) ? jj : uniq_sg_ind[jj] 
    
-    dum = floor(10.*j/(n_elements(t_arr)-1))*10
+    dum = floor(10.*jj/(n_elements(object_t)-1))*10
     if dum ne percent then begin
       print, string(dum, f='(i3)')+' %'
       percent = dum
@@ -271,23 +279,22 @@ for i=0, n_elements(sav_files)-1 do begin
     dum = min(abs(times[-1] - t_arr[j]), match_sji)
     dum = min(abs(times[1] - t_arr[j]), match_aia)
     dum = min(abs(times[2] - t_arr[j]), match_1600)
-    if match_aia gt (size(fe_xviii_data))[3]-1 then continue
+    if match_aia gt (size(fe18))[3]-1 then continue
     match1 = [match_aia, match_aia, match_1600, match_sji]
     cenx = (indices[-1])[match_sji].crval1
     ceny = (indices[-1])[match_sji].crval2
     xr = cenx + hfov*[-1, 1]
     yr = ceny + hfov*[-1, 1]
     for k=0, 3 do begin   ; AIA & SJI
-      wv_ind = wv_inds[k]
       if match0[k] eq match1[k] then continue 
       match0[k] = match1[k]
       match = match1[k]
-      cur_data = (k eq 0) ? fe_xviii_data[*, *, match] : (data[wv_ind])[*, *, match] 
-      get_xp_yp, (indices[wv_ind])[match], xp, yp
+      cur_data = (k eq 0) ? fe18[*, *, match] : (data[k])[*, *, match] 
+      get_xp_yp, (indices[k])[match], xp, yp
       if k ne 3 then begin
-        xp -= interpol(eout.aia_shift[*, 0], eout.aia_shift[*, 2], (times[wv_ind])[match], /nan)
-        yp -= interpol(eout.aia_shift[*, 1], eout.aia_shift[*, 2], (times[wv_ind])[match], /nan)        
-      endif else cur_data = iris_intscale(temporary(cur_data), (indices[wv_ind])[match])
+        xp -= interpol(eout.aia_shift[*, 0], eout.aia_shift[*, 2], (times[k])[match], /nan)
+        yp -= interpol(eout.aia_shift[*, 1], eout.aia_shift[*, 2], (times[k])[match], /nan)        
+      endif else cur_data = iris_intscale(temporary(cur_data), (indices[k])[match])
       im01[k].xr = xr
       im01[k].yr = yr
       setdata_hi_res, im01[k], cur_data, xp, yp
@@ -307,9 +314,9 @@ for i=0, n_elements(sav_files)-1 do begin
           im011[l].max = 1
         endfor
       endif
-      t01[k].string = titles[k] + strmid((indices[wv_ind])[match].date_obs, 0, 19)
+      t01[k].string = titles[k] + strmid((indices[k])[match].date_obs, 0, 19)
     endfor
-
+;    stop
 ;-------------------------------    
 
     page = 0
@@ -329,8 +336,7 @@ plot_spectra :
         p03[l].setdata, si_wavep, temp_datap
         p03[l].axes[1].showtext=1
         p03[l].yticklen=0.07
-        p03[l].ystyle = 1
-        p03[l].yr = [-3, max(temp_datap)*1.3]
+        p03[l].yr = [-3, max(temp_datap)*1.5]
 
         si_res = eout.si_iv_fit_res[moss[l]]
         p031[l].setdata, si_wavep, gaussian(si_wavep, si_res.coeff) 
@@ -348,7 +354,6 @@ plot_spectra :
         p04[l].setdata, mg_wave[dum], temp_data[dum]
         p04[l].axes[1].showtext = 1
         p04[l].yticklen = 0.03
-        p04[l].ystyle = 1
         p04[l].yr = [-10., max(temp_data[dum])*1.2]
 
         t040[l].string = strmid(anytim(eout.sg_phy[2, moss[l]], /ccsds), 0, 19)+'!c'+$
@@ -370,14 +375,12 @@ plot_spectra :
           t041[l, m].hide = 0 
         endfor
         
-        if eout.mg_ii_fit_res[2, moss[l]].emiss gt 0 then begin
-          dum = min(abs(mg_wave - 2798.823), mg_trip_ind)
-          p042[l].setdata, [2798.823], temp_data[mg_trip_ind]
-          p042[l].hide = 0
+        t042[l].string = 'EW = '+string(eout.mg_ii_fit_res[2, moss[l]].emiss, f='(f5.2)')+' $\AA$' 
+        t042[l].hide = 0
         endif
       endif               
     endfor
-    p051.setdata, (times[0])[0:ind1+j], [[fe_xviii_curve[0:ind1+j]], [fltarr(ind1+j+1)+p05.yr[0]]]
+    p051.setdata, (times[0])[0:ind1+j], [[fe18_curve[0:ind1+j]], [fltarr(ind1+j+1)+p05.yr[0]]]
 ;    stop
     w1.save, png_name, resol=130
     
@@ -396,7 +399,7 @@ plot_spectra :
           p041[l, m].hide = 1
           t041[l, m].hide = 1
         endfor
-        p042[l].hide = 1
+        t042[l].hide = 1
       endfor
     endif
 

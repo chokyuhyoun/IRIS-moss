@@ -26,7 +26,7 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
   mg_h_dr = mg_h_cen + 2.*[-1, 1]
   mg_k_dr = mg_k_cen + 2.*[-1, 1]
   
-  res = {name:'', coeff:fltarr(9), v_d_3:0., wr:[0., 0.], chisq:0., cen:0., emiss:1}
+  res = {name:'', coeff:fltarr(9), v_d_3:0., wr:[0., 0.], chisq:0., cen:0., emiss:0.}
   res = replicate(res, 3)
   res[2].name = 'Mg II triplet'
   for i=0, 1 do begin
@@ -69,12 +69,13 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
 ;    stop 
   endfor
   
+  dlam = mean(wave[1:*] - wave[0:-1])
   mg_trip_dr = [2797.5, 2802.5]
   mg_trip_part = where(wave ge mg_trip_dr[0] and wave le mg_trip_dr[1])
   coeff = poly_fit(wave[mg_trip_part], spec[mg_trip_part], 2)
   partp = where((wave ge mg_triplet-0.25) and (wave le mg_triplet+0.25))
   res[2].wr = mg_trip_dr
-  res[2].emiss = total((spec - poly(wave, coeff))[partp]) 
+  res[2].emiss = total(((spec - poly(wave, coeff))/poly(wave, coeff))[partp])*dlam ; EW 
   res[2].cen = mg_triplet
 ;  stop
 ;  if keyword_set(plot) then begin

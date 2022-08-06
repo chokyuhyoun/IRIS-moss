@@ -1,6 +1,6 @@
 dir = '/Users/khcho/Desktop/IRIS-moss-main/'
 cd, dir
-ar_num = 'ar12524'
+ar_num = 'ar12529'
 dum = file_search(dir, '*event*.sav')
 sav_files = dum[where(strmatch(dum, '*'+ar_num+'*'))]
 out_dir = '/'+strjoin((strsplit(sav_files[0], '/', /extract))[0:-3], '/')+'/'
@@ -25,6 +25,7 @@ aia_phy = !null
 phase = !null
 sg_ind = !null
 sg_dy = !null
+dem_res = !null
 if 1 then begin
   for i=0, n_elements(sav_files)-1 do begin
     restore, sav_files[i], /relax
@@ -51,34 +52,102 @@ if 1 then begin
       dum[2, *] = i
       sg_ind = [[sg_ind], [dum]]   ; [y_pix, time in a dataset, dataset]
       sg_dy = [[sg_dy], replicate(eout.sg_dy, eout.moss_num)]
-;      print, mean(eout.si_iv_fit_res.v_nth, /nan)
+      
+      dir_name = file_dirname(sav_files[i])
+      restore, dir_name+'/emcube.sav'
+      dem_t = anytim(demstr.time)
+      dem_t1 = rebin(dem_t, n_elements(dem_t), eout.moss_num)
+      moss_t1 = rebin(eout.aia_phy[2, *], n_elements(dem_t), eout.moss_num)
+      t_diff = abs(dem_t1 - moss_t1)
+      t_diff_min = min(t_diff, dim=1, t_min_ind0)
+      t_prev_ind = reform((array_indices(t_diff, t_min_ind0))[0, *]) - 2 > 0
+      for j=0, eout.moss_num-1 do begin
+        dem_res = [[dem_res], [reform(demstr[t_prev_ind[j]].dem[eout.aia_ind[0, j], eout.aia_ind[1, j], *])]]
+      endfor
     endif
     moss_num = [moss_num, eout.moss_num]
   endfor
+  event_no = intarr(total(moss_num))
+  no = 0
+  for i=1, n_elements(event_no)-1 do begin
+    same_event = where((abs(sg_ind[0, 0:i-1] - sg_ind[0, i]) le 2./sg_dy[i]) and $
+      (abs(sg_ind[1, 0:i-1] - sg_ind[1, i]) le 1.) and $
+      (sg_ind[2, 0:i-1] eq sg_ind[2, i]), count)
+    if count eq 0 then no += 1
+    event_no[i] = no
+  endfor
+
+  temp_arr = 5.5+findgen(21)*0.1
+
+  titles = ['Si IV Peak Intensity (Photons pix$^{-1}$ s$^{-1}$)', $
+            'Si IV Nonthermal Velocity (km s$^{-1}$)', $
+            'Si IV Doppler Velocity (km s$^{-1}$)', $
+            'Mg II k3 Doppler Velocity (km s$^{-1}$)', $
+            'Mg II h3 Doppler Velocity (km s$^{-1}$)']
+  pars = [[si_peak], [si_nth], [si_v], [mg_k_v], [mg_h_v], [total(dem_res, 1)]]
+  par_names = ['si_peak', 'si_nth', 'si_v', 'mg_k_v', 'mg_h_v', 'e_den']
+  
+  sz = [n_elements(event_no), max(event_no)+1, n_elements(par_names)]
+  cast = make_array(sz[0], sz[1], value = !values.f_nan)
+  cast[indgen(sz[0]), event_no] = 1
+  cast_all = rebin(cast, sz[0], sz[1], sz[2])
+  pars_all = rebin(reform(pars, sz[0], 1, sz[2]), sz[0], sz[1], sz[2]) * cast_all
+  pars_ev_mean = mean(pars_all, dim=1, /nan)
+  pars_ev_std = stddev(pars_all, dim=1, /nan)
+  pars_ev_std[where(~finite(pars_ev_std))] = 0.
+  t_ev = (reform(aia_phy[2, *]))[uniq(event_no)]
   save, t0, t1, tr, tt, ind0, ind1, si_peak, si_v, si_nth, mg_k_v, mg_h_v, mg_trip, $
-        err_mg_h, err_mg_k, err_si, $
-        filename='gethering_moss_param.sav'
+        err_mg_h, err_mg_k, err_si, event_no, cast, pars_ev_mean, pars_ev_std, t_ev, $
+        dem_res, $
+        filename=out_dir+'gethering_moss_param.sav'
   eout = 0 
-endif else restore, 'gethering_moss_param.sav'
+endif else restore, out_dir+'gethering_moss_param.sav'
 
-titles = ['Si IV Peak Intensity (Photons pix$^{-1}$ s$^{-1}$)', $
-          'Si IV Nonthermal Velocity (km s$^{-1}$)', $
-          'Si IV Doppler Velocity (km s$^{-1}$)', $
-          'Mg II k3 Doppler Velocity (km s$^{-1}$)', $
-          'Mg II h3 Doppler Velocity (km s$^{-1}$)']
-pars = [[si_peak], [si_nth], [si_v], [mg_k_v], [mg_h_v]]
-par_names = ['si_peak', 'si_nth', 'si_v', 'mg_k_v', 'mg_h_v']  
+;----------------------------------
 
-event_no = intarr(total(moss_num))
-no = 0
-for i=1, n_elements(event_no)-1 do begin
-  same_event = where((abs(sg_ind[0, 0:i-1] - sg_ind[0, i]) le 2./sg_dy[i]) and $
-                     (abs(sg_ind[1, 0:i-1] - sg_ind[1, i]) le 1.) and $
-                     (sg_ind[2, 0:i-1] eq sg_ind[2, i]), count) 
-  if count eq 0 then no += 1
-  event_no[i] = no
+
+
+
+
+stop
+;
+
+;--------------------------------------------------------
+w1 = window(dim=[8d2, 8d2])
+p011 = objarr(max(event_no)+1)
+p012 = objarr(max(event_no)+1, 3)
+p01 = plot3d(pars_ev_mean[*, 0], pars_ev_mean[*, 1], pars_ev_mean[*, 2], $
+            /current, /nodata, clip=0, axis=2, $
+            ytitle='Si V$_{nth}$', ztitle='Si V$_D$', xtitle='Si peak Int.', $
+            font_name='malgun gothic', font_size=13, font_style=1)
+for i=0, 2 do begin
+  p01.axes[i].showtext = 1
+  p01.axes[i].text_orient = 90
 endfor
-
+gether_sav_file = file_search(dir, '*gether*.sav')
+for j=0, n_elements(gether_sav_file)-1 do begin
+  restore, gether_sav_file[j]
+  col = (['red', 'blue'])[j]
+  for i=0, max(event_no) do begin ; event 
+;    col = reform((colortable(40))[(bytscl(t_ev))[i], *])
+    p011[i] = plot3d([pars_ev_mean[i, 0]], [pars_ev_mean[i, 1]], [pars_ev_mean[i, 2]], $
+                     over=p01, sym_object=orb(), sym_color=col, sym_transparency=60, $
+                     sym_size = (total(cast, 1, /nan)/30 + 0.5)[i])
+    p012[i, 0] = plot3d(pars_ev_mean[i, 0]+pars_ev_std[i, 0]*[1, -1], $
+                        pars_ev_mean[i, 1]*[1, 1], $
+                        pars_ev_mean[i, 2]*[1, 1], $
+                        over=p01, color='gray', transp=80)
+    p012[i, 1] = plot3d(pars_ev_mean[i, 0]*[1, 1], $
+                        pars_ev_mean[i, 1]+pars_ev_std[i, 1]*[1, -1], $
+                        pars_ev_mean[i, 2]*[1, 1], $
+                        over=p01, color='gray', transp=80)
+    p012[i, 2] = plot3d(pars_ev_mean[i, 0]*[1, 1], $
+                        pars_ev_mean[i, 1]*[1, 1], $
+                        pars_ev_mean[i, 2]+pars_ev_std[i, 2]*[1, -1], $
+                        over=p01, color='gray', transp=80)      
+  ;stop                   
+  endfor
+endfor          
 stop
 ;-----------------------------------------------------------------------------------
 if 0 then begin 
