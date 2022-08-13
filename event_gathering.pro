@@ -7,12 +7,14 @@ times = !null
 si_v = !null
 si_nth = !null
 si_peak = !null
+cur_fwhm = !null
 mg_h3v = !null
 mg_k3v = !null
 e_den = !null
 sg_ind = !null
 sg_dy = !null
 ar_no = !null
+mg_trip = !null
 for i=0, n_elements(obj_dir)-1 do begin
   ar_num = fix(strmid((strsplit(obj_dir[i], '/', /extract))[-1], 2, 5))
   sav_files = file_search(obj_dir[i], '/*moss_event*.sav')
@@ -27,8 +29,10 @@ for i=0, n_elements(obj_dir)-1 do begin
     si_peak = [si_peak, reform(eout.si_iv_fit_res.coeff[0, *])]
     si_v = [si_v, eout.si_iv_fit_res.v_d]
     si_nth = [si_nth, eout.si_iv_fit_res.v_nth]
+    cur_fwhm = [cur_fwhm, eout.curve_fwhm]
     mg_k3v = [mg_k3v, reform(eout.mg_ii_fit_res[0, *].v_d_3)]
     mg_h3v = [mg_h3v, reform(eout.mg_ii_fit_res[1, *].v_d_3)]    
+    mg_trip = [mg_trip, reform(eout.mg_ii_fit_res[2, *].emiss)]
     dum = eout.sg_ind
     dum[2, *] = j
     sg_ind = [[sg_ind], [dum]]   ; [y_pix, time in a dataset, dataset]
@@ -56,9 +60,14 @@ for ii=1, n_elements(event_no)-1 do begin
   if count eq 0 then no += 1
   event_no[ii] = no
 endfor
-pars = [[ar_no], [sol_x], [sol_y], [times], [si_v], [si_nth], [si_peak], [mg_h3v], [mg_k3v], [e_den]]
-par_names = ['ar_no', 'sol_x', 'sol_y', 'times', 'si_v', 'si_nth', 'si_peak', 'mg_h3v', 'mg_k3v', 'e_den']
-
+pars = [[ar_no], [sol_x], [sol_y], [times], [si_v], [si_nth], [si_peak], [cur_fwhm], $
+        [mg_h3v], [mg_k3v], [mg_trip], [e_den]]
+par_names = ['ar_no', 'sol_x', 'sol_y', 'times', 'si_v', 'si_nth', 'si_peak', 'cur_fwhm', $
+             'mg_h3v', 'mg_k3v', 'mg_trip', 'e_den']
+par_titles = ['AR no', 'Solar X (arcsec)', 'Solar Y (arcsec)', 'Time', 'v$_{D, Si IV}$ (km s$^{-1}$)', $
+              'v$_{nth, Si IV}$ (km s$^{-1}$)', 'I$_{Peak, Si IV}$ (DN)', 'Event Duration (s)', $
+              'v$_{D, Mg II h3}$ (km $s^{-1}$)', 'v$_{D, Mg II k3}$ (km $s^{-1}$)', 'EW$_{Mg II triplet} (\AA$)', $
+              'Emission Measure ($10^{26} cm^{-5}$)']
 sz = [n_elements(event_no), max(event_no)+1, n_elements(par_names)]
 cast = make_array(sz[0], sz[1], value = !values.f_nan)
 cast[indgen(sz[0]), event_no] = 1
@@ -77,7 +86,7 @@ endfor
 dum = execute('pars_event_mean = {'+strjoin(com0, ', ')+'}')
 dum = execute('pars_event_std = {'+strjoin(com1, ', ')+'}')
 
-save, pars, par_names, pars_event_mean, pars_event_std, $
+save, pars, par_names, pars_event_mean, pars_event_std, event_no, par_titles, $
       filename=dir + '/moss_param_event_total.sav'
 
 
