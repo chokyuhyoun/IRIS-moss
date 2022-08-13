@@ -22,6 +22,7 @@ moss spectra paper
       - small Si IV blueshift (3/10)
     3. Lack of evidence of nonthermal electrons (3/10)
     
+
 * Investigating the Response of Loop Plasma to Nanoflare Heating Using RADYN Simulations
   (Polito et al. 2018)
   - https://ui.adsabs.harvard.edu/abs/2018ApJ...856..178P/abstract
@@ -36,12 +37,29 @@ moss spectra paper
   - Si IV blueshift : if nonthermal electron can reach the chromosphere
     --> low density, high cutoff energy of nonthermal electron
   - AIA 94A light curve <--> Si IV intensity 
-    --> contribution of energy release between Chorona and choromosphere)
-  - 
-  - 
+    --> comparing the contribution of energy release between Chorona and choromosphere
 
 
-* (Testa el al. 2014)
+* Evidence of nonthermal particles in coronal loops heated impulsively by nanoflares
+  (Testa el al. 2014)
+  - https://ui.adsabs.harvard.edu/abs/2014Sci...346B.315T/abstract
+  - IRIS obs. 
+    - typical duration of 20-60s, Si IV upflow ~ 15 km/s 
+  - RADYN simulation 
+    - Require nonthermal electron beam, event duration < 30 s, total E ~ 10^24~24 erg
+    - synthetic spectra : 
+      - similar duration of the heating event
+      - Si IV blueshift = Nonthermal electron beam / Redshift = thermal conduction
+      - location of energy deposit depends on E_c (low energy cut-off) of electron beam, 
+        and affects blue/redshift and brightenings of Ch / TR lines. 
+  - importance of determination of E_c
+    - drive the nonthermal energy content
+    - constrain mechanisms of particle acceleration
+    - 
+
+
+
+
 * (Reale et al. 2019a)
 
 
