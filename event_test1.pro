@@ -4,14 +4,14 @@ cd, dir
 gather_files = file_search(dir, 'moss_param_event_total.sav')
 restore, gather_files
 
-overall = 0
+overall = 1
 sin_theta_and_si_nonthermal = 0
-mg_ii_comparison = 1
+mg_ii_comparison = 0
 si_dop_and_em = 0
-si_mg_vel = 1
+si_mg_vel = 0
 all = 0
 
-;par_names = ['ar_no', 'sol_x', 'sol_y', 'times', 'si_v', 'si_nth', 'si_peak', 'cur_fwhm', $
+;par_names = ['ar_no', 'sol_x', 'sol_y', 'times', 'si_v', 'si_nth', 'si_peak', 'si_i_tot', 'log_den', 'cur_fwhm', $
 ;             'mg_h3v', 'mg_k3v', 'mg_trip', 'e_den']
 
 ars = fix(pars_event_mean.ar_no[uniq(pars_event_mean.ar_no)])

@@ -7,6 +7,8 @@ times = !null
 si_v = !null
 si_nth = !null
 si_peak = !null
+si_i_tot = !null
+log_den = !null
 cur_fwhm = !null
 mg_h3v = !null
 mg_k3v = !null
@@ -29,6 +31,8 @@ for i=0, n_elements(obj_dir)-1 do begin
     si_peak = [si_peak, reform(eout.si_iv_fit_res.coeff[0, *])]
     si_v = [si_v, eout.si_iv_fit_res.v_d]
     si_nth = [si_nth, eout.si_iv_fit_res.v_nth]
+    si_i_tot = [si_i_tot, eout.si_iv_fit_res.i_tot]
+    log_den = [log_den, eout.si_iv_fit_res.log_den]
     cur_fwhm = [cur_fwhm, eout.curve_fwhm]
     mg_k3v = [mg_k3v, reform(eout.mg_ii_fit_res[0, *].v_d_3)]
     mg_h3v = [mg_h3v, reform(eout.mg_ii_fit_res[1, *].v_d_3)]    
@@ -60,12 +64,13 @@ for ii=1, n_elements(event_no)-1 do begin
   if count eq 0 then no += 1
   event_no[ii] = no
 endfor
-pars = [[ar_no], [sol_x], [sol_y], [times], [si_v], [si_nth], [si_peak], [cur_fwhm], $
+pars = [[ar_no], [sol_x], [sol_y], [times], [si_v], [si_nth], [si_peak], [si_i_tot], [log_den], [cur_fwhm], $
         [mg_h3v], [mg_k3v], [mg_trip], [e_den]]
-par_names = ['ar_no', 'sol_x', 'sol_y', 'times', 'si_v', 'si_nth', 'si_peak', 'cur_fwhm', $
+par_names = ['ar_no', 'sol_x', 'sol_y', 'times', 'si_v', 'si_nth', 'si_peak', 'si_i_tot', 'log_den', 'cur_fwhm', $
              'mg_h3v', 'mg_k3v', 'mg_trip', 'e_den']
 par_titles = ['AR no', 'Solar X (arcsec)', 'Solar Y (arcsec)', 'Time', 'v$_{D, Si IV}$ (km s$^{-1}$)', $
-              'v$_{nth, Si IV}$ (km s$^{-1}$)', 'I$_{Peak, Si IV}$ (DN)', 'Event Duration (s)', $
+              'v$_{nth, Si IV}$ (km s$^{-1}$)', 'I$_{Peak, Si IV}$ (DN)', 'I_${tot, Si IV}', $
+              'Log $\rho$', 'Event Duration (s)', $
               'v$_{D, Mg II h3}$ (km $s^{-1}$)', 'v$_{D, Mg II k3}$ (km $s^{-1}$)', 'EW$_{Mg II triplet} (\AA$)', $
               'Emission Measure ($10^{26} cm^{-5}$)']
 sz = [n_elements(event_no), max(event_no)+1, n_elements(par_names)]
@@ -77,16 +82,28 @@ pars_ev_mean = mean(pars_all, dim=1, /nan)
 pars_ev_std = stddev(pars_all, dim=1, /nan)
 pars_ev_std[where(~finite(pars_ev_std))] = 0.
 
+ref_ind = !null
+for ii=0, max(event_no) do begin
+  ind0 = where(si_i_tot eq max(si_i_tot[where(event_no eq ii)]))
+  ref_ind = [ref_ind, ind0]
+endfor
+pars_ev_peak = pars[ref_ind, *]
+ind_log_den = [0, (uniq(event_no))[0:-2]+1]
+pars_ev_peak[*, where(par_names eq 'log_den')] = log_den[ind_log_den] 
+
 com0 = !null
 com1 = !null
+com2 = !null
 for i=0, n_elements(par_names)-1 do begin
   com0 = [com0, par_names[i]+':pars_ev_mean[*, '+string(i, f='(i0)')+']']
   com1 = [com1, par_names[i]+':pars_ev_std[*, '+string(i, f='(i0)')+']']
+  com2 = [com2, par_names[i]+':pars_ev_peak[*, '+string(i, f='(i0)')+']']
 endfor
 dum = execute('pars_event_mean = {'+strjoin(com0, ', ')+'}')
 dum = execute('pars_event_std = {'+strjoin(com1, ', ')+'}')
+dum = execute('pars_event_peak = {'+strjoin(com2, ', ')+'}')
 
-save, pars, par_names, pars_event_mean, pars_event_std, event_no, par_titles, $
+save, pars, par_names, pars_event_mean, pars_event_std, pars_event_peak, event_no, par_titles, $
       filename=dir + '/moss_param_event_total.sav'
 
 

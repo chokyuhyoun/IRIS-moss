@@ -16,7 +16,7 @@ sdo_files=sdo_files, dem_save_path=dem_save_path
 ;/mossfilter : create moss area mask (193A > 1250 DN)
 ;/filter1700 : remove larger flare or filament brightening (1700A/1600A > 0.2)
 ;/fexviii : Fe XVIII image (94A - 211A/120. - 171A/450.)
-;/loopfilter : find hot regions (94A > 5 DN)
+;/loopfilter : find hot regions (Fe XVIII > 5 DN)
 ;/rundem : make DEM results
 ;/demfilter : remove DEM(log T = 5.6 ~ 5.8) > 2 * 10^26 cm^-5
 ;                    DEM(log T = 6.7 ~ 7.0) > 2.5 * 10^27 cm^-5

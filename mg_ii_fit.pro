@@ -19,16 +19,18 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
 
   if n_elements(dn2phot) eq 0 then dn2phot = 18.  ; Please check using iris_get_response(time)
 
+  res = {name:'', coeff:replicate(!values.d_nan, 9), v_d_3:!values.d_nan, wr:replicate(!values.d_nan, 2), $
+         chisq:!values.d_nan, cen:!values.d_nan, emiss:!values.d_nan}
+  res = replicate(res, 3)
+  if total(where(finite(spec))) eq -1 then return, res
+
   mg_h_cen = 2803.5310d0
   mg_k_cen = 2796.3501d0
   mg_triplet = 2798.823d0
 
   mg_h_dr = mg_h_cen + 2.*[-1, 1]
   mg_k_dr = mg_k_cen + 2.*[-1, 1]
-  
-  res = {name:'', coeff:fltarr(9), v_d_3:0., wr:[0., 0.], chisq:0., cen:0., emiss:0.}
-  res = replicate(res, 3)
-  res[2].name = 'Mg II triplet'
+
   for i=0, 1 do begin
     mg_cen = ([mg_k_cen, mg_h_cen])[i]
     mg_dr = ([[mg_k_dr], [mg_h_dr]])[*, i]
@@ -74,6 +76,7 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
   mg_trip_part = where(wave ge mg_trip_dr[0] and wave le mg_trip_dr[1])
   coeff = poly_fit(wave[mg_trip_part], spec[mg_trip_part], 2)
   partp = where((wave ge mg_triplet-0.25) and (wave le mg_triplet+0.25))
+  res[2].name = 'Mg II triplet'
   res[2].wr = mg_trip_dr
   res[2].emiss = total(((spec - poly(wave, coeff))/poly(wave, coeff))[partp])*dlam ; EW 
   res[2].cen = mg_triplet

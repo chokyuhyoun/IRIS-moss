@@ -154,9 +154,8 @@ for i=0, n_elements(sav_files)-1 do begin
                         font_size=10, vertical_align=1)
     endfor
     t042_pos = p04[l].convertcoord(2798.823, 0.25, /data, /to_normal)
-    t042[l] = text(t042_pos[0], t042_pos[1], 'EW = 0 $\AA$', /normal, $
-                   font_size=10, font_name='malgun gothic', font_style=1, $
-                   align=0.5)
+    t042[l] = text(t042_pos[0], t042_pos[1], '  ', /normal, $
+                   font_size=10, font_name='malgun gothic', align=0.5)
     t040[l] = text(mean(p04[l].pos[[0, 2]]), p04[l].pos[3]-0.05, '  ', $
                   font_size=12, font_name='malgun gothic', font_style=1, $
                   align=0.5)
@@ -266,7 +265,7 @@ for i=0, n_elements(sav_files)-1 do begin
   object_t = (~keyword_set(moss_only)) ? t_arr : uniq_sg_ind  
   for jj=0, n_elements(object_t)-1 do begin
     j = (~keyword_set(moss_only)) ? jj : uniq_sg_ind[jj] 
-   
+;    j = 39
     dum = floor(10.*jj/(n_elements(object_t)-1))*10
     if dum ne percent then begin
       print, string(dum, f='(i3)')+' %'
@@ -328,7 +327,7 @@ plot_spectra :
 
     for l = 0, count-1 do begin  ; Spectrograph data
       if l ge 5 then continue
-      if si_win then begin
+      if si_win ne 0 then begin
         temp_data = (eout.data_list[si_win_ind])[*, moss[l]]
         cenp = where((si_wave ge si_dr[0]) and (si_wave le si_dr[1]))
         si_wavep = si_wave[cenp]
@@ -348,7 +347,7 @@ plot_spectra :
         t031[l].hide = 0
       endif ; si_win
 
-      if mg_win then begin 
+      if mg_win ne 0 then begin 
         temp_data = (eout.data_list[mg_win_ind])[*, moss[l]]
         dum = where((mg_wave ge p04[l].xr[0]) and (mg_wave le p04[l].xr[1]))
         p04[l].setdata, mg_wave[dum], temp_data[dum]
@@ -375,9 +374,9 @@ plot_spectra :
           t041[l, m].hide = 0 
         endfor
         
-        t042[l].string = 'EW = '+string(eout.mg_ii_fit_res[2, moss[l]].emiss, f='(f5.2)')+' $\AA$' 
+        t042[l].string = 'EW = '+string(eout.mg_ii_fit_res[2, moss[l]].emiss, f='(f6.3)')+' $\AA$' 
         t042[l].hide = 0
-        endif
+        
       endif               
     endfor
     p051.setdata, (times[0])[0:ind1+j], [[fe18_curve[0:ind1+j]], [fltarr(ind1+j+1)+p05.yr[0]]]
