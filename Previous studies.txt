@@ -55,11 +55,18 @@ moss spectra paper
   - importance of determination of E_c
     - drive the nonthermal energy content
     - constrain mechanisms of particle acceleration
-    - 
+
+* Plasma Diagnostics of Transition Region "Moss" using SOHO/CDS and TRACE 
+  (Fletcher & De Pontieu 1999)
+  - https://ui.adsabs.harvard.edu/abs/1999ApJ...520L.135F/abstract
+  - Moss observation using SOHO CDS & TRACE 171 A
+  - T ~ 0.6-1.5 MK / associated with T > 2MK hot loop
+  - density ~ 2-5 * 10^9 cm^-3
+  - filling factor ~ 0.1
+  
 
 
-
-
+* Berger et al. 1999)
 * (Reale et al. 2019a)
 
 
