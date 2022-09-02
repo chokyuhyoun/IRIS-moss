@@ -25,8 +25,8 @@ function si_iv_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
   w_fwhm = 2.*sqrt(2.*alog(2.))*coeff[2]          ;https://iris.lmsal.com/itn38/analysis_lines_iris.html#line-fitting
   w_nth = sqrt(w_fwhm^2. - w_th_si^2. - w_inst^2.)
   v_nth = w_nth*3d5/si_cen
-  chisq = total(((fit_res-spec)/si_err)^2., /nan)
-  i_tot = total(specp, /nan)
+  chisq = total((specp-fit_res)^2./fit_res, /nan)
+  i_tot = total(specp, /nan)*mean(wavep[1:*]-wavep[0:-2], /nan) ; unit = [DN Angstrom] due to different spectral resolution.
   
   o4_1 = 1399.77
   o4_2 = 1401.16
