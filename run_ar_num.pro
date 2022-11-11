@@ -1,5 +1,5 @@
 pro run_ar_num, ar_num, movie=movie
-  if ~keyword_set(movie) then movie = 1
+  if ~keyword_set(movie) then movie = 0
   str = 'https://www.lmsal.com/hek/hcr?cmd=search-events3&outputformat=json&'+$
         'startTime=2013-07-20T00:00&stopTime=2022-07-15T00:00&target=AR&maxrasterStepsize=0&'+$
         'maxcadMeanAsrun=15&specWindows=Mg+II+k+2796,Mg+II+h+2803,Si+IV+1403&'+$
@@ -37,4 +37,5 @@ pro run_ar_num, ar_num, movie=movie
   if movie then make_aia_sji_movie, 'ar'+string(ar_num, f='(i0)'), /moss_only
 end
 
-;run_ar_num, 12409
+run_ar_num, 12415
+end

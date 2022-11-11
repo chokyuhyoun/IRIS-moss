@@ -19,7 +19,7 @@ sji_files = file_search(iris_dir, 'iris_l2_*SJI*.fits')
 aia_files = file_search(aia_dir, 'aia_l2*.fits', count=n)
 if n eq 0 then begin
   print, 'No avaliable AIA files'
-  save, filename='No_AIA_files.sav'
+  save, filename=out_dir+'No_AIA_files.sav'
   return
 endif
 
@@ -120,14 +120,21 @@ endif
   curve_peak_ind = !null
   si_iv_curve = !null
   si_iv_time = !null
+  pre_sg_ind = !null
+  aft_sg_ind = !null
   
   aia_ind = !null ; [x, y, t] index for IRIS / AIA cube
   aia_phy = !null  ; [x arcsec, y arcsec, sec from the beginning of AIA observation]
   aia193_value = !null
+  pre_aia_ind = !null
   
   si_iv_fit_res = !null
   mg_ii_fit_res = !null
-  
+  pre_si_iv_fit_res = !null
+  pre_mg_ii_fit_res = !null
+  aft_si_iv_fit_res = !null
+  aft_mg_ii_fit_res = !null
+
   for i=0, n_elements(sg_files)-1 do begin ; raster file no
     dd = iris_obj(sg_files[i])
     sg_xp = dd->getxpos()
@@ -139,6 +146,8 @@ endif
       nwin = dd->getnwin()
       line_id = dd->getline_id()
       data_list = list(len=nwin)
+      pre_data_list = list(len=nwin)
+      aft_data_list = list(len=nwin)
       wave_list = list(len=nwin)
       for ii=0, nwin-1 do begin
         wave_list[ii] = dd->getlam(ii)
@@ -151,10 +160,12 @@ endif
     sg_dt = mean(sg_time[1:*] - sg_time[0:-2])
     t_lim_sg = floor(t_lim*2 / sg_dt)
     if (Si_IV_ind ne -1) and sit_and_stare then begin
-      Si_IV_int_ind = where(wave_list[Si_IV_ind] gt 1402. and wave_list[Si_IV_ind] lt 1404.)
+      Si_IV_int_ind = where(wave_list[Si_IV_ind] gt 1402.77-2. and wave_list[Si_IV_ind] lt 1402.77+2.)
     endif else continue ;; only for SI IV obs. and sit-and-stare
     
-    
+    spat_bin =  (dd->binning_region('FUV'))[0]
+    spec_bin = (dd->binning_spectral(si_iv_ind))[0]   
+;    stop
     for j=0, n_elements(sg_xp)-1 do begin ; raster scan no
   ; time check
       sg_aia193_tdiff = min(abs(sg_time[j]-aia193_time), match_aia193)
@@ -224,7 +235,7 @@ endif
           curve_dt = sji_index[0].cdelt3
           t_lim_ind = t_lim_sji
         endelse
-        if n_elements(si_iv_curve0) lt 2*t_lim_ind + 1 then begin
+        if n_elements(si_iv_curve0) lt 2*t_lim_ind + 1 then begin ;; center of si_iv_curve0 = j
           deficit = 2*t_lim_ind+1-n_elements(si_iv_curve0)
           if match_sji lt 0.5*n_elements(sji_index) then begin
             si_iv_curve0 = [fltarr(deficit)*!values.f_nan, si_iv_curve0]
@@ -236,30 +247,55 @@ endif
         endif
         curve_fwhm0 = !null
 ;        if total(finite(si_iv_curve0)) lt 0.5*n_elements(si_iv_curve0) then stop
-        var_chk, si_iv_curve0, curve_dt, curve_fwhm0, i_0, curve_peak_ind0
+        var_chk, si_iv_curve0, curve_dt, curve_fwhm0, i_0, curve_peak_ind0, before_ind, after_ind
 ;        stop
         if n_elements(curve_fwhm0) eq 0 then continue
         moss_num += 1
 
+        j0 = (j+before_ind) > 0  ;; before_ind : negative
+        j1 = (j+after_ind) < (n_elements(sg_xp)-1)
         
         if si_iv_ind ge 0 then begin
           dum = (dd->getvar(si_iv_ind))[*, spec_yind[k], j]
-          si_spec = (dd->descale_array(dum)) / sg_expt[j, si_iv_ind]
-          si_iv_fit_res0 = si_iv_fit(wave_list[Si_IV_ind], si_spec)
+          si_spec = (dd->descale_array(dum)) *1. / sg_expt[j, si_iv_ind] / spec_bin / spat_bin  
+          si_iv_fit_res0 = si_iv_fit(wave_list[Si_IV_ind], si_spec, spec_bin=spec_bin)
+          
+          dum = (dd->getvar(si_iv_ind))[*, spec_yind[k], j0]
+          pre_si_spec = (dd->descale_array(dum)) *1. / sg_expt[j0, si_iv_ind] / spec_bin / spat_bin   
+          pre_si_iv_fit_res0 = si_iv_fit(wave_list[Si_IV_ind], pre_si_spec, spec_bin=spec_bin)
+          
+          dum = (dd->getvar(si_iv_ind))[*, spec_yind[k], j1]
+          aft_si_spec = (dd->descale_array(dum)) *1. / sg_expt[j1, si_iv_ind] / spec_bin / spat_bin 
+          aft_si_iv_fit_res0 = si_iv_fit(wave_list[Si_IV_ind], aft_si_spec, spec_bin=spec_bin)
         endif else si_iv_fit_res0 = 0
         
         if mg_ii_ind ge 0 then begin
           dum = (dd->getvar(mg_ii_ind))[*, spec_yind[k], j]
           mg_spec = (dd->descale_array(dum)) / sg_expt[j, mg_ii_ind]
           mg_ii_fit_res0 = mg_ii_fit(wave_list[mg_ii_ind], mg_spec)
+
+          dum = (dd->getvar(mg_ii_ind))[*, spec_yind[k], j0]
+          pre_mg_spec = (dd->descale_array(dum)) / sg_expt[j0, mg_ii_ind]
+          pre_mg_ii_fit_res0 = mg_ii_fit(wave_list[mg_ii_ind], pre_mg_spec)
+
+          dum = (dd->getvar(mg_ii_ind))[*, spec_yind[k], j1]
+          aft_mg_spec = (dd->descale_array(dum)) / sg_expt[j1, mg_ii_ind]
+          aft_mg_ii_fit_res0 = mg_ii_fit(wave_list[mg_ii_ind], aft_mg_spec)
         endif else mg_ii_fit_res0 = [0, 0]
 ;        stop
   ; save variables
         for l=0, nwin-1 do begin  ; for spectral windows
           dum = (dd->getvar(l))[*, spec_yind[k], j]
           data_list[l] = [[data_list[l]], [(dd->descale_array(dum))/ sg_expt[j, l]]]
+          dum = (dd->getvar(l))[*, spec_yind[k], j0]
+          pre_data_list[l] = [[pre_data_list[l]], [(dd->descale_array(dum))/ sg_expt[j0, l]]]
+          dum = (dd->getvar(l))[*, spec_yind[k], j1]
+          aft_data_list[l] = [[aft_data_list[l]], [(dd->descale_array(dum))/ sg_expt[j1, l]]]
+
         endfor
         sg_ind = [[sg_ind], [spec_yind[k], j, i]]  ; [ypix, scan #, file #]
+        pre_sg_ind = [[pre_sg_ind], [spec_yind[k], j0, i]]  
+        aft_sg_ind = [[aft_sg_ind], [spec_yind[k], j1, i]]
         sg_phy = [[sg_phy], [xpos, ypos, sg_time[j]]]
         sji_ind = [[sji_ind], [sji_xpix, sji_ypix, match_sji]]
         sji_phy = [sji_phy, sji_time[match_sji]]
@@ -268,6 +304,7 @@ endif
         curve_fwhm = [curve_fwhm, curve_fwhm0]
         curve_peak_ind = [curve_peak_ind, curve_peak_ind0]
         aia_ind = [[aia_ind], [moss_ind_spec[*, k], match_aia193]]
+        pre_aia_ind = [[pre_aia_ind], [moss_ind_spec[*, k], (match_aia193-curve_fwhm0/12.)>0]]
         aia_phy = [[aia_phy], $
           [moss_xp[real_ind[0, k]], moss_yp[real_ind[0, k]], aia193_time[match_aia193]]]
   
@@ -276,6 +313,10 @@ endif
         aia193_value = [aia193_value, interpolate(aia193_data[*, *, match_aia193], aia_xpix, aia_ypix)]
         si_iv_fit_res = [si_iv_fit_res, si_iv_fit_res0]
         mg_ii_fit_res = [[mg_ii_fit_res], [mg_ii_fit_res0]]
+        pre_si_iv_fit_res = [pre_si_iv_fit_res, pre_si_iv_fit_res0]
+        pre_mg_ii_fit_res = [[pre_mg_ii_fit_res], [pre_mg_ii_fit_res0]]
+        aft_si_iv_fit_res = [aft_si_iv_fit_res, aft_si_iv_fit_res0]
+        aft_mg_ii_fit_res = [[aft_mg_ii_fit_res], [aft_mg_ii_fit_res0]]
 ;      stop
       endfor ;sg pixels
 ;    if strmatch(aia193_index[match_aia193].date_obs, '*09:42:29*') eq 1 then stop
@@ -285,8 +326,11 @@ endif
 
 ;  stop
   if n_elements(data_list[0]) ne 0 then begin
+    dum = file_search(out_dir+'/No_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav', $
+                      count=prev_exist)
+    if prev_exist ge 1 then file_delete, dum
     eout = {data_list:data_list, wave_list:wave_list, line_id:line_id, $
-            sg_ind:sg_ind, sg_phy:sg_phy, sg_dy:sg_dy, $
+            sg_ind:sg_ind, sg_phy:sg_phy, sg_dy:sg_dy, pre_sg_ind:pre_sg_ind, aft_sg_ind:aft_sg_ind, $
             sji_ind:sji_ind, sji_phy:sji_phy, $
             curve_fwhm:curve_fwhm, si_iv_curve:si_iv_curve, si_iv_time:si_iv_time, $
             curve_dt:curve_dt, curve_peak_ind:curve_peak_ind, $
@@ -294,10 +338,17 @@ endif
             aia193_value:aia193_value, zcube:zcube, sji_wave:sji_index[0].twave1, $
             sg_files:sg_files, sji_files:sji_files, aia_files:aia_files, $
             si_iv_fit_res:si_iv_fit_res, mg_ii_fit_res:mg_ii_fit_res, $
-            obj_pix_num:obj_pix_num, moss_num:moss_num}
+            obj_pix_num:obj_pix_num, moss_num:moss_num, $
+            pre_si_iv_fit_res:pre_si_iv_fit_res, pre_mg_ii_fit_res:pre_mg_ii_fit_res, $
+            pre_data_list:pre_data_list, pre_aia_ind:pre_aia_ind, $
+            aft_si_iv_fit_res:aft_si_iv_fit_res, aft_mg_ii_fit_res:aft_mg_ii_fit_res, $
+            aft_data_list:aft_data_list, spat_bin:spat_bin, spec_bin:spec_bin}
+
     save, eout, filename=save_filename
   endif else begin
     print, 'No results'
+    dum = file_search(save_filename, count=prev_exist)
+    if prev_exist ge 1 then file_delete, dum
     eout = {wave_list:wave_list, line_id:line_id, $
             aia_shift:aia_shift, $
             zcube:zcube, sji_wave:sji_index[0].twave1, $
@@ -306,6 +357,10 @@ endif
     save, eout, filename=out_dir+'/No_event_'+strmid(file_basename(sji_files[0]), 8, 15)+'.sav'
   endelse
   mash = 0
+  data_list = 0
+  pre_data_list = 0
+  aft_data_list = 0
+  wave_list = 0
 ;endif
 print, out_dir + ' finished. It takes '+string((systime(/sec)-ti)/6d1, f='(f4.1)')+' min'
 

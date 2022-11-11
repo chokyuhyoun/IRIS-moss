@@ -1,3 +1,8 @@
+function poly_2o, x, p
+  p = double(p)
+  return, p[0] + p[1]*x + p[2]*(x^2.) 
+end
+
 function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
 ; please check iris_mgfit.pro
 ;PURPOSE-generates a vector of a double gaussian + wing line profile
@@ -15,12 +20,12 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
 ;P[8]=width^2 of negative gaussian
 ;
 ;OUTPUTS: Vector of same size as X with the line profile
-;; positive Doppler velocity --> upward motion (blueshift)
+;; positive Doppler velocity --> downward motion (redshift)
 
   if n_elements(dn2phot) eq 0 then dn2phot = 18.  ; Please check using iris_get_response(time)
 
   res = {name:'', coeff:replicate(!values.d_nan, 9), v_d_3:!values.d_nan, wr:replicate(!values.d_nan, 2), $
-         chisq:!values.d_nan, cen:!values.d_nan, emiss:!values.d_nan}
+         chisq:!values.d_nan, cen:!values.d_nan, emiss:!values.d_nan, centr:!values.d_nan}
   res = replicate(res, 3)
   if total(where(finite(spec))) eq -1 then return, res
 
@@ -55,30 +60,45 @@ function mg_ii_fit, wave, spec, init=init, dn2phot=dn2phot, plot=plot
     lims[6].limited[*] = 1 & lims[6].limits = [0, 1]                    ; fractional of negative Gaussian amplitude
     lims[7].limited[*] = 1 & lims[7].limits = mean(mg_dr) + 1.*[-1, 1]   ; centeroid of negative Gaussian
     lims[8].limited[1] = 1 & lims[8].limits[1] = 0.2
+;    weight = max(abs(wavep-mg_cen)) - abs(wavep-mg_cen)
     p = mpfitfun('iris_mgfit', wavep, specp, mg_err, init0, $
-                  parinfo=lims, perror=g, quiet=1, weights=1d/specp, $
+                  parinfo=lims, perror=g, quiet=1, weights=1d, $/specp, $
                   maxiter=400, status=st, ftol=1d-9)
     fit_res = iris_mgfit(wavepn, p)              
     mg_rvpos = iris_postfit_gen(wavepn, fit_res)
-    v_d_3 = -(mg_rvpos[8]-mg_cen)*3d5/mg_cen
-    chisq = total((specp-iris_mgfit(wavep, p))^2./mg_err)
+    v_d_3 = (mg_rvpos[8]-mg_cen)*3d5/mg_cen
+    exp_spec = iris_mgfit(wavep, p)
+    chisq = total((specp-exp_spec)^2./exp_spec, /nan)
     res[i].coeff = p
     res[i].v_d_3 = (mg_rvpos[10] eq 1) ? v_d_3 : !values.f_nan
     res[i].wr = mg_dr
     res[i].chisq = chisq
     res[i].name = (['Mg II k', 'Mg II h'])[i]
     res[i].cen = mg_cen
-;    stop 
+    
+    wave_p1 = where(abs(wave-mg_cen) le 0.65, /null)       ; correspond to 70 km/s
+    tot_int = total(spec[wave_p1])
+    centroid = total(spec[wave_p1]*(wave[wave_p1]-mg_cen)/mg_cen*3d5)/tot_int  ; in km/s
+    res[i].centr = centroid
+    res[i].emiss = tot_int
+    
   endfor
-  
   dlam = mean(wave[1:*] - wave[0:-1])
   mg_trip_dr = [2797.5, 2802.5]
   mg_trip_part = where(wave ge mg_trip_dr[0] and wave le mg_trip_dr[1])
-  coeff = poly_fit(wave[mg_trip_part], spec[mg_trip_part], 2)
-  partp = where((wave ge mg_triplet-0.25) and (wave le mg_triplet+0.25))
+
+  lims = {value:0., fixed:0, limited:[0, 0], limits:[0., 0.]}
+  lims = replicate(lims, 3)
+  lims[2].limited[1] = 1 & lims[2].limits[1] = 0d  
+  p = mpfitfun('poly_2o', wave[mg_trip_part], spec[mg_trip_part], $
+               [4d6,  2850d0, -0.5], parinfo=lims, quiet=1, weights=1d)
+;  coeff = poly_fit(wave[mg_trip_part], spec[mg_trip_part], 2)
+  partp = where((wave ge mg_triplet-0.2) and (wave le mg_triplet+0.2))
+  res[2].coeff[0:2] = p
   res[2].name = 'Mg II triplet'
   res[2].wr = mg_trip_dr
-  res[2].emiss = total(((spec - poly(wave, coeff))/poly(wave, coeff))[partp])*dlam ; EW 
+;  res[2].emiss = total(((spec - poly(wave, coeff))/poly(wave, coeff))[partp])*dlam ; EW 
+  res[2].emiss = total(((spec - poly_2o(wave, p))/poly_2o(wave, p))[partp])*dlam ; EW
   res[2].cen = mg_triplet
 ;  stop
 ;  if keyword_set(plot) then begin
