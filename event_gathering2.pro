@@ -385,5 +385,10 @@ save, pars, pars_struct, par_names, var_names, pars_ev_mean, pars_ev_std, pars_e
       pars_pix_peak, event_no, pixel_no, par_titles, si_err, mg_k_err, mg_h_err, par_dr, si_dlam, $
       pars_ev_peak_ind, pars_pix_peak_ind, sg_ind, pre_sg_ind, sg_file, curve_dt, $
       filename=dir + '/moss_param_event_total_mg2.sav'
+
+; 2025. 3. 5. correction of peak index was done. 
+; sg_ind[*, 1] = sg_ind[*, 1] - 1
+; pre_sg_ind[*, 1] = pre_sg_ind[*, 1] - 1
+
 end
 
